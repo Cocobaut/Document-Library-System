@@ -8,7 +8,7 @@ from models.user_model import User
 from sqlalchemy.orm import Session
 
 from models.unit_model import Unit
-from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitDocumentStat, UnitUpdate, UnitLookupResponse
+from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitDocumentStat, UnitUpdate, UnitLookupResponse, UnitDetailResponse, UnitDetailMember
 from core.exceptions import DocumentNotFoundException
 from repositories.unit_repository import UnitRepository
 
@@ -116,6 +116,45 @@ class UnitService:
     def get_all_units_with_stats(db: Session):
         """Logic nghiệp vụ lấy tất cả đơn vị kèm thống kê thành viên & tài liệu"""
         return UnitRepository.get_all_units_with_stats(db)
+
+    @staticmethod
+    def get_unit_detail(db: Session, unit_id: UUID) -> UnitDetailResponse:
+        from models.document_model import Document
+        
+        unit = UnitRepository.get_by_id(db, unit_id)
+        if not unit:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Đơn vị không tồn tại."
+            )
+            
+        users = db.query(User).filter(User.unit_id == unit_id).all()
+        documents = db.query(Document).filter(Document.unit_id == unit_id).all()
+        
+        total_members = len(users)
+        total_documents = len(documents)
+        used_quota = sum((doc.file_size or 0) for doc in documents)
+        total_quota = unit.quota_bytes
+        
+        members = []
+        for user in users:
+            members.append(UnitDetailMember(
+                full_name=user.full_name,
+                role=user.role,
+                used_quota=user.storage_used,
+                total_quota=user.storage_quota,
+                status="active"
+            ))
+            
+        return UnitDetailResponse(
+            unit_id=unit.unit_id,
+            unit_name=unit.name,
+            total_members=total_members,
+            total_documents=total_documents,
+            used_quota=used_quota,
+            total_quota=total_quota,
+            members=members
+        )
     
     @staticmethod
     def update_unit_info(db: Session, unit_id: UUID, data: UnitUpdate) -> Unit:
@@ -202,3 +241,22 @@ class UnitService:
                 detail=f"Không tìm thấy đơn vị phòng ban nào có tên '{name}'."
             )
         return UnitLookupResponse(name=unit.name, unit_id=unit.unit_id)
+
+    @staticmethod
+    def get_analytics_overview(db: Session):
+        from models.document_model import Document
+        from sqlalchemy import func
+        from schemas.unit_schema import AnalyticsOverviewResponse
+        
+        total_units = db.query(Unit).count()
+        total_users = db.query(User).count()
+        total_documents = db.query(Document).count()
+        
+        used_bytes_sum = db.query(func.sum(User.storage_used)).scalar() or 0
+        
+        return AnalyticsOverviewResponse(
+            total_units=total_units,
+            total_users=total_users,
+            total_documents=total_documents,
+            quota_used_bytes=used_bytes_sum
+        )

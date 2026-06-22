@@ -64,50 +64,12 @@ interface QueueFile {
 
 // ─── Seed Data (Admin UI only) ────────────────────────────────────────────────
 
-const USERS: UserRecord[] = [
-  { id:"u1", name:"Alex Chen", email:"alex.chen@acme.com", role:"user", unit:"Engineering", status:"active", storageUsed:4.2, storageQuota:10, lastLogin:"2024-11-15 09:42", avatar:"AC", joined:"2023-03-12" },
-  { id:"u2", name:"Maria Santos", email:"m.santos@acme.com", role:"manager", unit:"Sales", status:"active", storageUsed:8.7, storageQuota:20, lastLogin:"2024-11-15 11:05", avatar:"MS", joined:"2022-07-18" },
-  { id:"u3", name:"Tom Walker", email:"t.walker@acme.com", role:"user", unit:"Design", status:"active", storageUsed:12.1, storageQuota:15, lastLogin:"2024-11-14 16:30", avatar:"TW", joined:"2023-09-01" },
-  { id:"u4", name:"Sara Kim", email:"s.kim@acme.com", role:"user", unit:"Engineering", status:"inactive", storageUsed:1.0, storageQuota:10, lastLogin:"2024-10-22 08:15", avatar:"SK", joined:"2024-01-08" },
-  { id:"u5", name:"James Liu", email:"j.liu@acme.com", role:"manager", unit:"Finance", status:"active", storageUsed:6.3, storageQuota:20, lastLogin:"2024-11-13 14:22", avatar:"JL", joined:"2022-04-25" },
-  { id:"u6", name:"Nina Patel", email:"n.patel@acme.com", role:"admin", unit:"IT", status:"active", storageUsed:3.2, storageQuota:50, lastLogin:"2024-11-15 08:00", avatar:"NP", joined:"2021-11-01" },
-  { id:"u7", name:"Ryan Cho", email:"r.cho@acme.com", role:"manager", unit:"Operations", status:"active", storageUsed:9.8, storageQuota:20, lastLogin:"2024-11-12 10:50", avatar:"RC", joined:"2022-12-14" },
-  { id:"u8", name:"Priya Nair", email:"p.nair@acme.com", role:"user", unit:"HR", status:"suspended", storageUsed:0.5, storageQuota:10, lastLogin:"2024-11-01 11:30", avatar:"PN", joined:"2024-02-20" },
-];
-
-const UNITS: Unit[] = [
-  { id:"un1", name:"Engineering", manager:"David Park", members:24, documents:342, storageUsed:48.2, storageQuota:100, description:"Software development and infrastructure" },
-  { id:"un2", name:"Sales", manager:"Maria Santos", members:18, documents:214, storageUsed:22.1, storageQuota:50, description:"Revenue and customer acquisition" },
-  { id:"un3", name:"Design", manager:"Lisa Grant", members:9, documents:487, storageUsed:78.4, storageQuota:100, description:"UX, visual design and brand" },
-  { id:"un4", name:"Finance", manager:"James Liu", members:12, documents:156, storageUsed:14.7, storageQuota:50, description:"Accounting and financial planning" },
-  { id:"un5", name:"HR", manager:"Karen Moss", members:7, documents:203, storageUsed:8.9, storageQuota:30, description:"People operations and talent" },
-  { id:"un6", name:"Operations", manager:"Ryan Cho", members:15, documents:289, storageUsed:31.5, storageQuota:75, description:"Business processes and logistics" },
-];
-
-
-
-const AREA_DATA = [
-  { month:"Jun", uploads:42, downloads:89 },
-  { month:"Jul", uploads:58, downloads:112 },
-  { month:"Aug", uploads:73, downloads:95 },
-  { month:"Sep", uploads:61, downloads:134 },
-  { month:"Oct", uploads:89, downloads:156 },
-  { month:"Nov", uploads:104, downloads:178 },
-];
-
-const BAR_DATA = [
-  { unit:"Eng", docs:342 }, { unit:"Design", docs:487 },
-  { unit:"Sales", docs:214 }, { unit:"Finance", docs:156 },
-  { unit:"HR", docs:203 }, { unit:"Ops", docs:289 },
-];
-
-const PIE_DATA = [
-  { name:"Engineering", value:48.2, color:"#2563EB" },
-  { name:"Design", value:78.4, color:"#7C3AED" },
-  { name:"Sales", value:22.1, color:"#059669" },
-  { name:"Finance", value:14.7, color:"#D97706" },
-  { name:"Others", value:40.4, color:"#94A3B8" },
-];
+const defaultUser: UserRecord = {
+  id: "", name: "", email: "", role: "user",
+  unit: "", status: "active",
+  storageUsed: 0, storageQuota: 10,
+  lastLogin: "", avatar: "U", joined: ""
+};
 
 // ─── Auth API ─────────────────────────────────────────────────────────────────
 
@@ -183,7 +145,7 @@ function buildUserFromAuth(auth: { username: string; role: Role; userId: string 
 
 // ─── Document API ─────────────────────────────────────────────────────────────
 
-interface ApiDoc {
+export interface ApiDoc {
   document_id: string;
   title: string;
   owner_id: string;
@@ -206,9 +168,215 @@ interface DocListResponse {
   total_pages: number;
 }
 
+export interface UnitStorageStats {
+  unit_id: string;
+  unit_name: string;
+  quota_bytes: number;
+  used_bytes: number;
+  free_bytes: number;
+  usage_percent: number;
+  total_documents: number;
+  total_users: number;
+  inherited_documents: number;
+}
+
+export interface UserResponse {
+  id: string;
+  username: string;
+  full_name: string;
+  role: string;
+  unit_id: string | null;
+  quota_bytes: number;
+  used_bytes: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UnitStatResponse {
+  unit_id: string;
+  name: string;
+  user_count: number;
+  document_count: number;
+}
+
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem("access_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchUnitsStatsApi(): Promise<UnitStatResponse[]> {
+  const res = await fetch(`${API_BASE}/admin/units/stats`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to load unit stats");
+  return res.json();
+}
+
+export interface UnitDetailMember {
+  full_name: string;
+  role: string;
+  used_quota: number;
+  total_quota: number;
+  status: string;
+}
+
+export interface UnitDetailResponse {
+  unit_id: string;
+  unit_name: string;
+  total_members: number;
+  total_documents: number;
+  used_quota: number;
+  total_quota: number;
+  members: UnitDetailMember[];
+}
+
+async function fetchUnitDetailApi(unitId: string): Promise<UnitDetailResponse> {
+  const res = await fetch(`${API_BASE}/admin/units/${unitId}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to load unit details");
+  return res.json();
+}
+
+async function createUnitApi(payload: { name: string; parent_id?: number | null; quota_bytes?: number }): Promise<any> {
+  const res = await fetch(`${API_BASE}/admin/units`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to create unit");
+  }
+  return res.json();
+}
+
+async function updateUnitApi(unitId: string, payload: { name?: string; quota_bytes?: number; manager_user_id?: string }): Promise<any> {
+  const res = await fetch(`${API_BASE}/admin/units/${unitId}`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to update unit");
+  }
+  return res.json();
+}
+
+async function deleteUnitApi(unitId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/admin/units/${unitId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 204) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to delete unit");
+  }
+}
+
+export interface ApiUserResponse {
+  id: string;
+  username: string;
+  full_name: string;
+  role: Role;
+  unit_id: string | null;
+  quota_bytes: number;
+  used_bytes: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UnitQuotaResponse {
+  unit_id: string;
+  name: string;
+  quota_bytes: number;
+}
+
+export interface TotalQuotaSystemResponse {
+  total_quota_bytes: number;
+  total_units: number;
+}
+
+export interface AnalyticsOverviewResponse {
+  total_units: number;
+  total_users: number;
+  total_documents: number;
+  quota_used_bytes: number;
+}
+
+async function fetchAnalyticsOverviewApi(): Promise<AnalyticsOverviewResponse> {
+  const res = await fetch(`${API_BASE}/admin/analytics/overview`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to load analytics overview");
+  return res.json();
+}
+
+export interface UnitDocumentStat {
+  unit_id: string;
+  unit_name: string;
+  total_documents: number;
+}
+
+export interface CompanyDocumentStatsResponse {
+  company_total_documents: number;
+  details_by_unit: UnitDocumentStat[];
+}
+
+async function fetchUsersApi(): Promise<ApiUserResponse[]> {
+  const res = await fetch(`${API_BASE}/admin/users`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to load users");
+  return res.json();
+}
+
+async function createUserApi(payload: any): Promise<ApiUserResponse> {
+  const res = await fetch(`${API_BASE}/admin/users`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to create user");
+  }
+  return res.json();
+}
+
+async function fetchSystemQuotaApi(): Promise<TotalQuotaSystemResponse> {
+  const res = await fetch(`${API_BASE}/admin/quota/system`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to load system quota");
+  return res.json();
+}
+
+async function fetchDocumentStatsApi(): Promise<CompanyDocumentStatsResponse> {
+  const res = await fetch(`${API_BASE}/admin/documents/statistics`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to load document stats");
+  return res.json();
+}
+
+async function fetchUnitsQuotaApi(): Promise<UnitQuotaResponse[]> {
+  const res = await fetch(`${API_BASE}/admin/quota/units`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to load units quota");
+  return res.json();
+}
+
+async function fetchManagerStatsApi(): Promise<UnitStorageStats> {
+  const res = await fetch(`${API_BASE}/manager/storage/stats`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to load unit stats");
+  return res.json();
+}
+
+async function fetchManagerUsersApi(): Promise<UserResponse[]> {
+  const res = await fetch(`${API_BASE}/manager/users`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to load unit users");
+  return res.json();
 }
 
 async function fetchDocumentsApi(page = 1, pageSize = 100): Promise<DocListResponse> {
@@ -362,13 +530,14 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function RolePill({ role }: { role: Role }) {
-  const map: Record<Role, { cls: string; label: string }> = {
+function RolePill({ role }: { role: string }) {
+  const map: Record<string, { cls: string; label: string }> = {
     admin:   { cls:"bg-violet-50 text-violet-700 border-violet-200", label:"Admin" },
     manager: { cls:"bg-blue-50   text-blue-700   border-blue-200",   label:"Unit Manager" },
     user:    { cls:"bg-slate-50  text-slate-600  border-slate-200",  label:"User" },
   };
-  const m = map[role];
+  const normalized = role?.toLowerCase() || "user";
+  const m = map[normalized] || { cls:"bg-slate-50 text-slate-600 border-slate-200", label: String(role || "Unknown") };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full border ${m.cls}`}>
       {m.label}
@@ -555,14 +724,11 @@ const NAV_ITEMS: Record<Role, Array<{ id:string; label:string; icon:React.ReactN
     { id:"home", label:"Dashboard", icon:<LayoutDashboard size={17}/> },
     { id:"documents", label:"Documents", icon:<FileText size={17}/> },
     { id:"upload", label:"Upload", icon:<Upload size={17}/> },
-    { id:"team", label:"My Team", icon:<Users size={17}/> },
   ],
   admin: [
-    { id:"home", label:"Overview", icon:<LayoutDashboard size={17}/> },
     { id:"units", label:"Units", icon:<Building2 size={17}/>, section:"Management" },
     { id:"users", label:"Users", icon:<Users size={17}/> },
     { id:"analytics", label:"Analytics", icon:<BarChart2 size={17}/> },
-    { id:"settings", label:"Settings", icon:<Settings size={17}/> },
   ],
 };
 
@@ -1231,22 +1397,94 @@ function UploadTab({ role }: { role: Role }) {
 // ─── Admin — Analytics Panel ───────────────────────────────────────────────────
 
 function AnalyticsPanel() {
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  
+  const [totalUnits, setTotalUnits] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
+  
+  const [totalDocuments, setTotalDocuments] = useState(0);
+  const [storageUsed, setStorageUsed] = useState(0);
+  
+  const [barData, setBarData] = useState<any[]>([]);
+  const [pieData, setPieData] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
+
+  const loadAnalytics = async () => {
+    setLoading(true);
+    setFetchError("");
+    try {
+      const [overview, docStats, unitsQuota] = await Promise.all([
+        fetchAnalyticsOverviewApi(),
+        fetchDocumentStatsApi(),
+        fetchUnitsQuotaApi()
+      ]);
+
+      setTotalUnits(overview.total_units);
+      setTotalUsers(overview.total_users);
+      
+      setTotalDocuments(overview.total_documents);
+      setStorageUsed(overview.quota_used_bytes);
+
+      setBarData(docStats.details_by_unit.map(d => ({
+        unit: d.unit_name.substring(0, 10),
+        docs: d.total_documents
+      })));
+
+      const colors = ["#2563EB", "#7C3AED", "#059669", "#D97706", "#94A3B8"];
+      setPieData(unitsQuota.map((u, i) => ({
+        name: u.name,
+        value: Number((u.quota_bytes / 1e9).toFixed(1)),
+        color: colors[i % colors.length]
+      })));
+
+    } catch (err: any) {
+      setFetchError(err.message || "Failed to load analytics");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+        <div className="w-8 h-8 border-3 border-slate-200 border-t-[#2563EB] rounded-full animate-spin mb-4" />
+        <p className="text-sm">Loading analytics data...</p>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-10 flex flex-col items-center justify-center shadow-sm">
+        <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+          <AlertCircle size={22} className="text-red-500" />
+        </div>
+        <p className="text-sm text-red-600 mb-4">{fetchError}</p>
+        <Btn onClick={loadAnalytics} icon={<RefreshCw size={13}/>}>Retry</Btn>
+      </div>
+    );
+  }
+
   const kpis = [
-    { label:"Total Units",      value:"6",          sub:"Across organization",    icon:<Building2 size={18}/>,    color:"blue"   as const, trend:+1 },
-    { label:"Total Users",      value:"85",          sub:"78 active · 7 inactive", icon:<Users size={18}/>,        color:"green"  as const, trend:+3 },
-    { label:"Total Documents",  value:"1,691",       sub:"+104 this month",         icon:<FileText size={18}/>,     color:"purple" as const, trend:+104 },
-    { label:"Storage Used",     value:"203.8 GB",   sub:"of 405 GB total (50%)",  icon:<HardDrive size={18}/>,    color:"orange" as const, trend:null },
+    { label:"Total Units",      value:String(totalUnits),          sub:"Total Unit",    icon:<Building2 size={18}/>,    color:"blue"   as const },
+    { label:"Total Users",      value:String(totalUsers),          sub:"Total User", icon:<Users size={18}/>,        color:"green"  as const },
+    { label:"Total Documents",  value:String(totalDocuments),       sub:"Total Document",         icon:<FileText size={18}/>,     color:"purple" as const },
+    { label:"Quota Used",       value:fmtSize(storageUsed),   sub:"Total storage used",  icon:<HardDrive size={18}/>,    color:"orange" as const },
   ];
+  
   const colorMap = {
-    blue:   { bg:"bg-blue-50",   icon:"text-[#2563EB]",   pill:"bg-blue-100 text-blue-600" },
-    green:  { bg:"bg-emerald-50", icon:"text-emerald-600", pill:"bg-emerald-100 text-emerald-600" },
-    purple: { bg:"bg-violet-50",  icon:"text-violet-600",  pill:"bg-violet-100 text-violet-600" },
-    orange: { bg:"bg-amber-50",   icon:"text-amber-600",   pill:"bg-amber-100 text-amber-600" },
+    blue:   { bg:"bg-blue-50",   icon:"text-[#2563EB]" },
+    green:  { bg:"bg-emerald-50", icon:"text-emerald-600" },
+    purple: { bg:"bg-violet-50",  icon:"text-violet-600" },
+    orange: { bg:"bg-amber-50",   icon:"text-amber-600" },
   };
 
   return (
     <div className="space-y-5">
-      {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {kpis.map(k => {
           const c = colorMap[k.color];
@@ -1254,11 +1492,6 @@ function AnalyticsPanel() {
             <div key={k.label} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${c.bg} ${c.icon}`}>{k.icon}</div>
-                {k.trend !== null && (
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-0.5 ${c.pill}`}>
-                    <TrendingUp size={10}/> +{k.trend}
-                  </span>
-                )}
               </div>
               <p className="text-2xl font-bold text-slate-900 mb-0.5" style={{ fontFamily:"var(--font-display)" }}>{k.value}</p>
               <p className="text-[11px] text-slate-400">{k.sub}</p>
@@ -1267,48 +1500,32 @@ function AnalyticsPanel() {
         })}
       </div>
 
-      {/* Charts row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-5">
-            <h3 className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>Document Activity</h3>
-            <span className="text-[11px] text-slate-400">Last 6 months</span>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={AREA_DATA}>
-              <defs>
-                <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="gDn" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#059669" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#059669" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-800 mb-4" style={{ fontFamily:"var(--font-display)" }}>Documents per Department</h3>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={barData} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false}/>
-              <XAxis dataKey="month" tick={{ fontSize:11, fill:"#94a3b8" }} axisLine={false} tickLine={false}/>
+              <XAxis dataKey="unit" tick={{ fontSize:11, fill:"#94a3b8" }} axisLine={false} tickLine={false}/>
               <YAxis tick={{ fontSize:11, fill:"#94a3b8" }} axisLine={false} tickLine={false}/>
               <Tooltip contentStyle={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, fontSize:12, boxShadow:"0 4px 12px rgba(0,0,0,.06)" }}/>
-              <Legend wrapperStyle={{ fontSize:12, paddingTop:8 }}/>
-              <Area type="monotone" dataKey="uploads" name="Uploads" stroke="#2563EB" strokeWidth={2.5} fill="url(#gUp)"/>
-              <Area type="monotone" dataKey="downloads" name="Downloads" stroke="#059669" strokeWidth={2.5} fill="url(#gDn)"/>
-            </AreaChart>
+              <Bar dataKey="docs" name="Documents" fill="#2563EB" radius={[6,6,0,0]}/>
+            </BarChart>
           </ResponsiveContainer>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4" style={{ fontFamily:"var(--font-display)" }}>Storage by Unit</h3>
-          <ResponsiveContainer width="100%" height={160}>
+          <h3 className="text-sm font-semibold text-slate-800 mb-4" style={{ fontFamily:"var(--font-display)" }}>Storage Quota by Unit</h3>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie data={PIE_DATA} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
-                {PIE_DATA.map((e, i) => <Cell key={i} fill={e.color}/>)}
+              <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value">
+                {pieData.map((e, i) => <Cell key={i} fill={e.color}/>)}
               </Pie>
-              <Tooltip formatter={v => [`${v} GB`, ""]} contentStyle={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, fontSize:12 }}/>
+              <Tooltip formatter={(v: any) => [`${v} GB`, ""]} contentStyle={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, fontSize:12 }}/>
             </PieChart>
           </ResponsiveContainer>
           <div className="space-y-2 mt-2">
-            {PIE_DATA.map(d => (
+            {pieData.map(d => (
               <div key={d.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background:d.color }}/>
@@ -1320,63 +1537,6 @@ function AnalyticsPanel() {
           </div>
         </div>
       </div>
-
-      {/* Charts row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4" style={{ fontFamily:"var(--font-display)" }}>Documents per Department</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={BAR_DATA} barSize={28}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false}/>
-              <XAxis dataKey="unit" tick={{ fontSize:11, fill:"#94a3b8" }} axisLine={false} tickLine={false}/>
-              <YAxis tick={{ fontSize:11, fill:"#94a3b8" }} axisLine={false} tickLine={false}/>
-              <Tooltip contentStyle={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, fontSize:12, boxShadow:"0 4px 12px rgba(0,0,0,.06)" }}/>
-              <Bar dataKey="docs" name="Documents" fill="#2563EB" radius={[6,6,0,0]}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>Most Active Users</h3>
-          </div>
-          <table className="w-full" style={{ fontFamily:"var(--font-sans)" }}>
-            <thead>
-              <tr className="bg-slate-50/60 border-b border-slate-100">
-                {["User", "Docs", "Activity"].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { name:"Tom Walker",   av:"TW", docs:487, pct:94 },
-                { name:"Alex Chen",    av:"AC", docs:342, pct:78 },
-                { name:"Maria Santos", av:"MS", docs:214, pct:65 },
-                { name:"James Liu",    av:"JL", docs:156, pct:52 },
-              ].map(u => (
-                <tr key={u.name} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors last:border-0">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Avatar initials={u.av} size="xs"/>
-                      <span className="text-xs font-medium text-slate-700">{u.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-xs font-mono text-slate-600">{u.docs}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#2563EB] rounded-full" style={{ width:`${u.pct}%` }}/>
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-mono w-7">{u.pct}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1384,15 +1544,134 @@ function AnalyticsPanel() {
 // ─── Admin — Units Panel ──────────────────────────────────────────────────────
 
 function UnitsPanel() {
-  const [units, setUnits] = useState<Unit[]>(UNITS);
-  const [selected, setSelected] = useState<Unit | null>(null);
+  const [units, setUnits] = useState<UnitStatResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<UnitDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
   const [modal, setModal] = useState<Modal>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [form, setForm] = useState({ name:"", manager:"", quota:"", description:"" });
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
+  const [form, setForm] = useState({ name: "", quota: "" });
+  const [formLoading, setFormLoading] = useState(false);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const showToast = (msg: string, type: "success" | "error" | "info" = "success") => setToast({ msg, type });
 
-  const unitUsers = (name: string) => USERS.filter(u => u.unit === name);
+  const loadUnits = async () => {
+    setLoading(true);
+    setFetchError("");
+    try {
+      const data = await fetchUnitsStatsApi();
+      setUnits(data);
+    } catch (err: any) {
+      setFetchError(err.message || "Failed to load units");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDetail = async (unitId: string) => {
+    setDetailLoading(true);
+    setDetailError("");
+    try {
+      const data = await fetchUnitDetailApi(unitId);
+      setDetail(data);
+    } catch (err: any) {
+      setDetailError(err.message || "Failed to load unit details");
+      setDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleSelectUnit = (unitId: string) => {
+    if (selectedId === unitId) {
+      setSelectedId(null);
+      setDetail(null);
+      setDetailError("");
+    } else {
+      setSelectedId(unitId);
+      loadDetail(unitId);
+    }
+  };
+
+  const handleCreateUnit = async () => {
+    if (!form.name.trim()) return;
+    setFormLoading(true);
+    try {
+      await createUnitApi({
+        name: form.name.trim(),
+        quota_bytes: form.quota ? Number(form.quota) * 1e9 : 0,
+      });
+      showToast("Unit created successfully");
+      setModal(null);
+      await loadUnits();
+    } catch (err: any) {
+      showToast(err.message || "Failed to create unit", "error");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleUpdateUnit = async () => {
+    if (!modal || modal.type !== "edit-unit") return;
+    setFormLoading(true);
+    try {
+      const payload: { name?: string; quota_bytes?: number } = {};
+      if (form.name.trim()) payload.name = form.name.trim();
+      if (form.quota) payload.quota_bytes = Number(form.quota) * 1e9;
+      await updateUnitApi(modal.unit.id, payload);
+      showToast("Unit updated successfully");
+      setModal(null);
+      await loadUnits();
+      if (selectedId === modal.unit.id) await loadDetail(modal.unit.id);
+    } catch (err: any) {
+      showToast(err.message || "Failed to update unit", "error");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteUnit = async (unitId: string) => {
+    setFormLoading(true);
+    try {
+      await deleteUnitApi(unitId);
+      showToast("Unit deleted successfully");
+      setModal(null);
+      if (selectedId === unitId) { setSelectedId(null); setDetail(null); }
+      await loadUnits();
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete unit", "error");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  useEffect(() => { loadUnits(); }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+        <div className="w-8 h-8 border-3 border-slate-200 border-t-[#2563EB] rounded-full animate-spin mb-4" />
+        <p className="text-sm">Loading departments…</p>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+          <AlertCircle size={22} className="text-red-500" />
+        </div>
+        <p className="text-sm text-red-600 mb-4">{fetchError}</p>
+        <Btn onClick={loadUnits} icon={<RefreshCw size={13}/>}>Retry</Btn>
+      </div>
+    );
+  }
+
+  const selectedUnit = units.find(u => u.unit_id === selectedId) ?? null;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
@@ -1402,104 +1681,135 @@ function UnitsPanel() {
           <h3 className="text-sm font-semibold text-slate-700" style={{ fontFamily:"var(--font-display)" }}>
             Departments <span className="text-slate-400 font-normal">({units.length})</span>
           </h3>
-          <Btn size="sm" icon={<Plus size={13}/>} onClick={() => { setForm({ name:"", manager:"", quota:"", description:"" }); setModal({ type:"add-unit" }); }}>
-            Add Unit
-          </Btn>
+          <div className="flex gap-2">
+            <Btn size="sm" variant="ghost" icon={<RefreshCw size={13}/>} onClick={loadUnits}>Refresh</Btn>
+            <Btn size="sm" icon={<Plus size={13}/>} onClick={() => { setForm({ name: "", quota: "" }); setModal({ type: "add-unit" }); }}>
+              Add Unit
+            </Btn>
+          </div>
         </div>
         {units.map(unit => {
-          const pct = (unit.storageUsed / unit.storageQuota) * 100;
-          const isSelected = selected?.id === unit.id;
+          const isSelected = selectedId === unit.unit_id;
           return (
-            <button key={unit.id} onClick={() => setSelected(isSelected ? null : unit)}
+            <button key={unit.unit_id} onClick={() => handleSelectUnit(unit.unit_id)}
               className={`w-full text-left bg-white rounded-2xl border p-4 transition-all hover:shadow-md ${isSelected ? "border-[#2563EB] shadow-md ring-1 ring-blue-200" : "border-slate-200 hover:border-slate-300 shadow-sm"}`}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>{unit.name}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{unit.description}</p>
                 </div>
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 ${isSelected ? "bg-[#2563EB]" : "bg-slate-100"}`}>
                   <Building2 size={15} className={isSelected ? "text-white" : "text-slate-500"}/>
                 </div>
               </div>
-              <div className="flex items-center gap-3 mb-2.5 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1"><Users size={11}/>{unit.members} members</span>
-                <span className="flex items-center gap-1"><FileText size={11}/>{unit.documents} docs</span>
+              <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                <span className="flex items-center gap-1"><Users size={11}/>{unit.user_count} members</span>
+                <span className="flex items-center gap-1"><FileText size={11}/>{unit.document_count} docs</span>
               </div>
-              <StorageBar used={unit.storageUsed} quota={unit.storageQuota}/>
             </button>
           );
         })}
+        {units.length === 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-10 flex flex-col items-center justify-center text-slate-300">
+            <Building2 size={36} strokeWidth={1.2} className="mb-2"/>
+            <p className="text-sm text-slate-400">No departments found</p>
+          </div>
+        )}
       </div>
 
       {/* Detail */}
       <div className="xl:col-span-3">
-        {selected ? (
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-blue-50 to-slate-50 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#2563EB] rounded-xl flex items-center justify-center shadow-sm shadow-blue-300">
-                  <Building2 size={18} className="text-white"/>
+        {selectedId ? (
+          detailLoading ? (
+            <div className="bg-white rounded-2xl border border-slate-200 h-full min-h-[320px] flex flex-col items-center justify-center text-slate-400 shadow-sm">
+              <div className="w-8 h-8 border-3 border-slate-200 border-t-[#2563EB] rounded-full animate-spin mb-4" />
+              <p className="text-sm">Loading details…</p>
+            </div>
+          ) : detailError ? (
+            <div className="bg-white rounded-2xl border border-slate-200 h-full min-h-[320px] flex flex-col items-center justify-center shadow-sm">
+              <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+                <AlertCircle size={22} className="text-red-500" />
+              </div>
+              <p className="text-sm text-red-600 mb-4">{detailError}</p>
+              <Btn onClick={() => loadDetail(selectedId)} icon={<RefreshCw size={13}/>}>Retry</Btn>
+            </div>
+          ) : detail ? (
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-blue-50 to-slate-50 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#2563EB] rounded-xl flex items-center justify-center shadow-sm shadow-blue-300">
+                    <Building2 size={18} className="text-white"/>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>{detail.unit_name}</h3>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>{selected.name}</h3>
-                  <p className="text-xs text-slate-500">Managed by {selected.manager}</p>
+                <div className="flex gap-2">
+                  <Btn size="sm" variant="outline" icon={<Edit3 size={13}/>} onClick={() => {
+                    setForm({ name: detail.unit_name, quota: detail.total_quota ? String(Math.round(detail.total_quota / 1e9)) : "" });
+                    setModal({ type: "edit-unit", unit: { id: detail.unit_id, name: detail.unit_name, manager: "", members: detail.total_members, documents: detail.total_documents, storageUsed: detail.used_quota, storageQuota: detail.total_quota, description: "" } });
+                  }}>Edit</Btn>
+                  <Btn size="sm" variant="danger" icon={<Trash2 size={13}/>} onClick={() => setModal({ type: "delete-unit", id: detail.unit_id })}>Delete</Btn>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Btn size="sm" variant="outline" icon={<Edit3 size={13}/>} onClick={() => { setForm({ name:selected.name, manager:selected.manager, quota:String(selected.storageQuota), description:selected.description }); setModal({ type:"edit-unit", unit:selected }); }}>Edit</Btn>
-                <Btn size="sm" variant="danger" icon={<Trash2 size={13}/>} onClick={() => setModal({ type:"delete-unit", id:selected.id })}>Delete</Btn>
+
+              {/* Stats strip */}
+              <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+                {[
+                  { label: "Members", value: detail.total_members },
+                  { label: "Documents", value: detail.total_documents },
+                  { label: "Storage", value: `${fmtSize(detail.used_quota)} / ${fmtSize(detail.total_quota)}` },
+                ].map(s => (
+                  <div key={s.label} className="py-3.5 px-4 text-center">
+                    <p className="text-lg font-bold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>{s.value}</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide">{s.label}</p>
+                  </div>
+                ))}
               </div>
-            </div>
 
-            {/* Stats strip */}
-            <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
-              {[
-                { label:"Members", value:selected.members },
-                { label:"Documents", value:selected.documents },
-                { label:"Storage", value:`${selected.storageUsed} / ${selected.storageQuota} GB` },
-              ].map(s => (
-                <div key={s.label} className="py-3.5 px-4 text-center">
-                  <p className="text-lg font-bold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>{s.value}</p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">{s.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Users table */}
-            <div className="overflow-x-auto">
-              <table className="w-full" style={{ fontFamily:"var(--font-sans)" }}>
-                <thead>
-                  <tr className="bg-slate-50/60 border-b border-slate-100">
-                    {["Employee", "Role", "Storage", "Status", "Last Login"].map(h => (
-                      <th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {unitUsers(selected.name).length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-400">No employees found in this unit</td></tr>
-                  ) : unitUsers(selected.name).map(u => (
-                    <tr key={u.id} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors last:border-0">
-                      <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar initials={u.avatar} size="sm"/>
-                          <div>
-                            <p className="text-sm font-medium text-slate-800">{u.name}</p>
-                            <p className="text-[11px] text-slate-400">{u.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5"><RolePill role={u.role}/></td>
-                      <td className="px-4 py-3.5 min-w-[160px]"><StorageBar used={u.storageUsed} quota={u.storageQuota}/></td>
-                      <td className="px-4 py-3.5"><StatusPill status={u.status}/></td>
-                      <td className="px-4 py-3.5 text-[11px] text-slate-400 font-mono whitespace-nowrap">{u.lastLogin}</td>
+              {/* Members table */}
+              <div className="overflow-x-auto">
+                <table className="w-full" style={{ fontFamily:"var(--font-sans)" }}>
+                  <thead>
+                    <tr className="bg-slate-50/60 border-b border-slate-100">
+                      {["Name", "Role", "Storage", "Status"].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {detail.members.length === 0 ? (
+                      <tr><td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-400">No members found in this unit</td></tr>
+                    ) : detail.members.map((m, idx) => (
+                      <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/80 transition-colors last:border-0">
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar initials={m.full_name.split(" ").map(w => w[0] ?? "").join("").toUpperCase().slice(0, 2) || "??"} size="sm"/>
+                            <p className="text-sm font-medium text-slate-800">{m.full_name}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full border ${
+                            m.role === "admin" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                            m.role === "manager" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                            "bg-slate-50 text-slate-600 border-slate-200"
+                          }`}>
+                            {m.role === "admin" ? "Admin" : m.role === "manager" ? "Unit Manager" : m.role.charAt(0).toUpperCase() + m.role.slice(1)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 min-w-[160px]">
+                          <StorageBar used={m.used_quota / 1e9} quota={m.total_quota / 1e9} />
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <StatusPill status={m.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : null
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 h-full min-h-[320px] flex flex-col items-center justify-center text-slate-300 shadow-sm">
             <Building2 size={40} strokeWidth={1.2} className="mb-3"/>
@@ -1508,7 +1818,7 @@ function UnitsPanel() {
         )}
       </div>
 
-      {/* Add Unit Modal */}
+      {/* Add / Edit Unit Modal */}
       {(modal?.type === "add-unit" || modal?.type === "edit-unit") && (
         <ModalShell
           title={modal.type === "add-unit" ? "Add New Unit" : "Edit Unit"}
@@ -1517,31 +1827,20 @@ function UnitsPanel() {
         >
           <div className="space-y-4">
             <Field label="Unit Name">
-              <TextInput value={form.name} onChange={v => setForm(p => ({ ...p, name:v }))} placeholder="e.g. Marketing" />
-            </Field>
-            <Field label="Manager">
-              <TextInput value={form.manager} onChange={v => setForm(p => ({ ...p, manager:v }))} placeholder="Manager full name" />
-            </Field>
-            <Field label="Description">
-              <TextInput value={form.description} onChange={v => setForm(p => ({ ...p, description:v }))} placeholder="Brief description…" />
+              <TextInput value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. Marketing" />
             </Field>
             <Field label="Storage Quota (GB)">
-              <TextInput value={form.quota} onChange={v => setForm(p => ({ ...p, quota:v }))} placeholder="e.g. 50" />
+              <TextInput value={form.quota} onChange={v => setForm(p => ({ ...p, quota: v }))} placeholder="e.g. 50" />
             </Field>
             <div className="flex gap-3 justify-end pt-2">
               <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={() => {
-                if (!form.name) return;
-                if (modal.type === "add-unit") {
-                  setUnits(p => [...p, { id:`un${Date.now()}`, name:form.name, manager:form.manager || "TBD", members:0, documents:0, storageUsed:0, storageQuota:Number(form.quota) || 50, description:form.description }]);
-                  showToast("Unit created successfully");
-                } else {
-                  setUnits(p => p.map(u => u.id === modal.unit.id ? { ...u, name:form.name, manager:form.manager, storageQuota:Number(form.quota) || u.storageQuota, description:form.description } : u));
-                  showToast("Unit updated");
-                }
-                setModal(null);
-              }}>
-                {modal.type === "add-unit" ? "Create Unit" : "Save Changes"}
+              <Btn
+                onClick={modal.type === "add-unit" ? handleCreateUnit : handleUpdateUnit}
+                disabled={formLoading}
+              >
+                {formLoading ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Saving…</>
+                ) : modal.type === "add-unit" ? "Create Unit" : "Save Changes"}
               </Btn>
             </div>
           </div>
@@ -1551,13 +1850,14 @@ function UnitsPanel() {
       {modal?.type === "delete-unit" && (
         <Confirm
           title="Delete Unit"
-          message={`Delete "${units.find(u => u.id === modal.id)?.name}"? All documents and user assignments in this unit will be affected. This cannot be undone.`}
-          onConfirm={() => { setUnits(p => p.filter(u => u.id !== modal.id)); setSelected(null); setModal(null); showToast("Unit deleted"); }}
+          message={`Delete "${units.find(u => u.unit_id === modal.id)?.name}"? All documents and user assignments in this unit will be affected. This cannot be undone.`}
+          onConfirm={() => handleDeleteUnit(modal.id)}
           onCancel={() => setModal(null)}
           danger
         />
       )}
-      {toast && <ToastBar msg={toast} type="success" onDone={() => setToast(null)} />}
+
+      {toast && <ToastBar msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
@@ -1565,15 +1865,89 @@ function UnitsPanel() {
 // ─── Admin — Users Panel ──────────────────────────────────────────────────────
 
 function UsersPanel() {
-  const [users, setUsers] = useState<UserRecord[]>(USERS);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [units, setUnits] = useState<UnitStatResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<{ msg:string; type:"success"|"error"|"info" }|null>(null);
+  
   const [form, setForm] = useState({ name:"", email:"", role:"user" as Role, unit:"", quota:"10" });
+  const [formLoading, setFormLoading] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    setFetchError("");
+    try {
+      const [usersData, unitsData] = await Promise.all([
+        fetchUsersApi(),
+        fetchUnitsStatsApi()
+      ]);
+      setUnits(unitsData);
+      
+      const unitMap = new Map(unitsData.map(u => [u.unit_id, u.name]));
+      
+      const mappedUsers: UserRecord[] = usersData.map(u => ({
+        id: u.id,
+        name: u.full_name || u.username || "Unknown",
+        email: u.username || "Unknown",
+        role: u.role || "user",
+        unit: u.unit_id ? (unitMap.get(u.unit_id) || "Unknown") : "Unassigned",
+        status: u.is_active ? "active" : "inactive",
+        storageUsed: u.used_bytes || 0,
+        storageQuota: u.quota_bytes || 1,
+        lastLogin: u.updated_at,
+        avatar: (u.full_name || u.username || "U").substring(0, 2).toUpperCase(),
+        joined: u.created_at || new Date().toISOString(),
+      }));
+      setUsers(mappedUsers);
+    } catch (err: any) {
+      setFetchError(err.message || "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const showToast = (msg: string, type: "success"|"error"|"info" = "success") => setToast({ msg, type });
+
+  const handleCreateUser = async () => {
+    if (!form.name || !form.email || !form.unit) {
+      showToast("Please fill all required fields", "error");
+      return;
+    }
+    const selectedUnit = units.find(u => u.name === form.unit);
+    if (!selectedUnit) {
+      showToast("Selected unit not found", "error");
+      return;
+    }
+    
+    setFormLoading(true);
+    try {
+      await createUserApi({
+        username: form.email,
+        password: "DefaultPassword123!", 
+        full_name: form.name,
+        role: form.role,
+        unit_id: selectedUnit.unit_id,
+        quota_bytes: Number(form.quota) * 1024 * 1024 * 1024 || 10737418240,
+      });
+      showToast("Account created successfully");
+      setModal(null);
+      loadData();
+    } catch (err: any) {
+      showToast(err.message || "Failed to create user", "error");
+    } finally {
+      setFormLoading(false);
+    }
+  };
 
   const filtered = users.filter(u => {
     const q = search.toLowerCase();
@@ -1612,13 +1986,17 @@ function UsersPanel() {
           <table className="w-full" style={{ fontFamily:"var(--font-sans)" }}>
             <thead>
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                {["User", "Role", "Department", "Storage", "Status", "Last Login", "Actions"].map(h => (
+                {["User", "Role", "Department", "Storage", "Status", "Joined", ""].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400">Loading users...</td></tr>
+              ) : fetchError ? (
+                <tr><td colSpan={7} className="px-4 py-12 text-center text-red-500">{fetchError}</td></tr>
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center">
                   <div className="flex flex-col items-center text-slate-300">
                     <Users size={32} strokeWidth={1.2} className="mb-2"/>
@@ -1638,32 +2016,13 @@ function UsersPanel() {
                   </td>
                   <td className="px-4 py-3.5"><RolePill role={u.role}/></td>
                   <td className="px-4 py-3.5 text-sm text-slate-600">{u.unit}</td>
-                  <td className="px-4 py-3.5 min-w-[160px]"><StorageBar used={u.storageUsed} quota={u.storageQuota}/></td>
+                  <td className="px-4 py-3.5 min-w-[160px]"><StorageBar used={u.storageUsed / 1e9} quota={u.storageQuota / 1e9}/></td>
                   <td className="px-4 py-3.5"><StatusPill status={u.status}/></td>
-                  <td className="px-4 py-3.5 text-[11px] text-slate-400 font-mono whitespace-nowrap">{u.lastLogin.split(" ")[0]}</td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setForm({ name:u.name, email:u.email, role:u.role, unit:u.unit, quota:String(u.storageQuota) }); setModal({ type:"edit-user", user:u }); }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-[#2563EB] transition-colors" title="Edit">
-                        <Edit3 size={13}/>
-                      </button>
-                      <button
-                        onClick={() => { setUsers(p => p.map(x => x.id === u.id ? { ...x, status: x.status === "active" ? "inactive" : "active" } : x)); showToast(u.status === "active" ? "User disabled" : "User enabled"); }}
-                        className={`w-7 h-7 flex items-center justify-center rounded-lg hover:bg-amber-50 transition-colors ${u.status !== "active" ? "text-amber-500" : "text-slate-400 hover:text-amber-500"}`}
-                        title={u.status === "active" ? "Disable" : "Enable"}
-                      >
-                        <UserX size={13}/>
-                      </button>
-                      <button
-                        onClick={() => setModal({ type:"reset-pw", user:u })}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 text-slate-400 hover:text-[#2563EB] transition-colors" title="Reset Password">
-                        <Key size={13}/>
-                      </button>
-                      <button onClick={() => setModal({ type:"delete-user", id:u.id })}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors" title="Delete">
-                        <Trash2 size={13}/>
-                      </button>
-                    </div>
+                  <td className="px-4 py-3.5 text-[11px] text-slate-400 font-mono whitespace-nowrap">
+                    {u.joined ? (isNaN(new Date(u.joined).getTime()) ? "Unknown" : new Date(u.joined).toLocaleDateString()) : "Unknown"}
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                     {/* Edit, delete, suspend buttons removed since there are no backend APIs for them yet */}
                   </td>
                 </tr>
               ))}
@@ -1672,11 +2031,11 @@ function UsersPanel() {
         </div>
       </div>
 
-      {/* Add/Edit User Modal */}
-      {(modal?.type === "add-user" || modal?.type === "edit-user") && (
+      {/* Add User Modal */}
+      {modal?.type === "add-user" && (
         <ModalShell
-          title={modal.type === "add-user" ? "Add New User" : "Edit User Account"}
-          subtitle={modal.type === "edit-user" ? modal.user.email : "Create a new user account"}
+          title="Add New User"
+          subtitle="Create a new user account"
           onClose={() => setModal(null)}
         >
           <div className="space-y-4">
@@ -1701,7 +2060,7 @@ function UsersPanel() {
               <Field label="Department">
                 <SelectInput value={form.unit} onChange={v => setForm(p => ({ ...p, unit:v }))}>
                   <option value="">Select…</option>
-                  {UNITS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  {units.map(u => <option key={u.unit_id} value={u.name}>{u.name}</option>)}
                 </SelectInput>
               </Field>
               <div className="col-span-2">
@@ -1712,24 +2071,8 @@ function UsersPanel() {
             </div>
             <div className="flex gap-3 justify-end pt-1">
               <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={() => {
-                if (!form.name || !form.email) return;
-                if (modal.type === "add-user") {
-                  const av = form.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2);
-                  setUsers(p => [...p, {
-                    id:`u${Date.now()}`, name:form.name, email:form.email, role:form.role,
-                    unit:form.unit || "Unassigned", status:"active",
-                    storageUsed:0, storageQuota:Number(form.quota)||10,
-                    lastLogin:"Never", avatar:av, joined:new Date().toISOString().slice(0,10),
-                  }]);
-                  showToast("Account created successfully");
-                } else {
-                  setUsers(p => p.map(u => u.id === modal.user.id ? { ...u, name:form.name, email:form.email, role:form.role, unit:form.unit, storageQuota:Number(form.quota)||u.storageQuota } : u));
-                  showToast("User account updated");
-                }
-                setModal(null);
-              }}>
-                {modal.type === "add-user" ? "Create Account" : "Save Changes"}
+              <Btn disabled={formLoading} onClick={handleCreateUser}>
+                {formLoading ? "Saving..." : "Create Account"}
               </Btn>
             </div>
           </div>
@@ -1817,40 +2160,113 @@ function UserDashboard({ user, activeNav }: { user: UserRecord, activeNav: strin
 }
 
 function ManagerDashboard({ user, activeNav }: { user: UserRecord, activeNav: string }) {
+  const [stats, setStats] = useState<UnitStorageStats | null>(null);
+  const [users, setUsers] = useState<UserResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadData = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [s, u] = await Promise.all([
+        fetchManagerStatsApi(),
+        fetchManagerUsersApi()
+      ]);
+      setStats(s);
+      setUsers(u);
+    } catch (err: any) {
+      setError(err.message || "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeNav === "home") {
+      loadData();
+    }
+  }, [activeNav]);
+
   if (activeNav === "documents") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><DocumentsTab role={user.role}/></div>;
   if (activeNav === "upload") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><UploadTab role={user.role}/></div>;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      <Header title="Document Management" subtitle="Sales · Unit Manager" />
+      <Header title={stats?.unit_name || "Document Management"} subtitle="Unit Manager Dashboard" />
       <main className="flex-1 overflow-y-auto bg-slate-50">
-        <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label:"Team Documents", value:"38", icon:<FileText size={15}/>, sub:"+12 this week", color:"blue" as const },
-              { label:"Active Shares", value:"14", icon:<Share2 size={15}/>, sub:"across team", color:"green" as const },
-              { label:"Team Members", value:"18", icon:<Users size={15}/>, sub:"in Sales unit", color:"purple" as const },
-              { label:"Storage Used", value:"22.1 GB", icon:<HardDrive size={15}/>, sub:"of 50 GB", color:"orange" as const },
-            ].map(k => (
-              <div key={k.label} className="bg-white rounded-xl border border-slate-200 px-4 py-3.5 shadow-sm">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 ${
-                  k.color === "blue" ? "bg-blue-50 text-[#2563EB]" :
-                  k.color === "green" ? "bg-emerald-50 text-emerald-600" :
-                  k.color === "purple" ? "bg-violet-50 text-violet-600" :
-                  "bg-amber-50 text-amber-500"
-                }`}>{k.icon}</div>
-                <p className="text-xl font-bold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>{k.value}</p>
-                <p className="text-[10px] text-slate-400 mt-0.5">{k.sub}</p>
+        <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+          {loading && <div className="p-8 flex justify-center"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}
+          {error && <div className="p-4 bg-red-50 text-red-600 rounded-xl shadow-sm border border-red-100">{error}</div>}
+          
+          {!loading && !error && stats && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                {[
+                  { label:"Documents", value:stats.total_documents, icon:<FileText size={15}/>, color:"blue" as const },
+                  { label:"Team Members", value:stats.total_users, icon:<Users size={15}/>, color:"purple" as const },
+                  { label:"Storage Used", value:fmtSize(stats.used_bytes), icon:<HardDrive size={15}/>, color:"orange" as const },
+                  { label:"Storage Capacity", value:fmtSize(stats.used_bytes + stats.free_bytes), icon:<Layers size={15}/>, color:"green" as const },
+                  { label:"Inherited Documents", value:stats.inherited_documents, icon:<Archive size={15}/>, color:"slate" as const },
+                ].map(k => (
+                  <div key={k.label} className="bg-white rounded-xl border border-slate-200 px-5 py-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${
+                      k.color === "blue" ? "bg-blue-50 text-[#2563EB]" :
+                      k.color === "green" ? "bg-emerald-50 text-emerald-600" :
+                      k.color === "purple" ? "bg-violet-50 text-violet-600" :
+                      k.color === "slate" ? "bg-slate-100 text-slate-600" :
+                      "bg-amber-50 text-amber-500"
+                    }`}>{k.icon}</div>
+                    <p className="text-2xl font-bold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>{k.value}</p>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">{k.label}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-8">
+                <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900" style={{ fontFamily:"var(--font-display)" }}>Department Members</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                        <th className="px-6 py-3.5">Full Name</th>
+                        <th className="px-6 py-3.5">Quota</th>
+                        <th className="px-6 py-3.5">Used Storage</th>
+                        <th className="px-6 py-3.5 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-sm">
+                      {users.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-slate-900">{u.full_name}</td>
+                          <td className="px-6 py-4 text-slate-500">{fmtSize(u.quota_bytes)}</td>
+                          <td className="px-6 py-4 text-slate-500">{fmtSize(u.used_bytes)}</td>
+                          <td className="px-6 py-4 text-right">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${u.is_active ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                              {u.is_active ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {users.length === 0 && (
+                        <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-500">No members found in this department.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </main>
     </div>
   );
 }
 
-function AdminDashboard({ user, activeNav }: { user: UserRecord, activeNav: string }) {
+function AdminDashboard({ user, activeNav: rawNav }: { user: UserRecord, activeNav: string }) {
+  const activeNav = rawNav === "home" || rawNav === "settings" ? "units" : rawNav;
   const tabMeta: Record<string, string> = { analytics:"Analytics Overview", units:"Unit Management", users:"User Management" };
 
   return (
@@ -2061,9 +2477,9 @@ export default function App() {
   const [view, setView] = useState<"login"|"app">(stored ? "app" : "login");
   const [role, setRole] = useState<Role>(stored?.role ?? "user");
   const [user, setUser] = useState<UserRecord>(
-    stored ? buildUserFromAuth({ username: stored.username, role: stored.role, userId: stored.userId }) : USERS[0]
+    stored ? buildUserFromAuth({ username: stored.username, role: stored.role, userId: stored.userId }) : defaultUser
   );
-  const [activeNav, setActiveNav] = useState("home");
+  const [activeNav, setActiveNav] = useState(stored?.role === "admin" ? "units" : "home");
 
   const handleLogin = (token: string, r: Role, username: string, userId: string) => {
     localStorage.setItem("access_token", token);
@@ -2071,7 +2487,7 @@ export default function App() {
     setRole(r);
     setUser(userRecord);
     setView("app");
-    setActiveNav("home");
+    setActiveNav(r === "admin" ? "units" : "home");
   };
 
   const handleLogout = () => {

@@ -59,6 +59,28 @@ class UnitStatResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UnitDetailMember(BaseModel):
+    full_name: str
+    role: str
+    used_quota: int
+    total_quota: int
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UnitDetailResponse(BaseModel):
+    unit_id: UUID
+    unit_name: str
+    total_members: int
+    total_documents: int
+    used_quota: int
+    total_quota: int
+    members: List[UnitDetailMember]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class UnitQuotaResponse(BaseModel):
     """Schema trả về thông tin hạn mức dung lượng của một phòng ban"""
     unit_id: UUID = Field(..., description="ID của đơn vị")
@@ -90,3 +112,9 @@ class CompanyDocumentStatsResponse(BaseModel):
 class UnitLookupResponse(BaseModel):
     name: str
     unit_id: UUID = Field(..., description="Mã định danh UUID của đơn vị phòng ban")
+
+class AnalyticsOverviewResponse(BaseModel):
+    total_units: int
+    total_users: int
+    total_documents: int
+    quota_used_bytes: int

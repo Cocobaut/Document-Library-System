@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from core.database import get_db
 from core.deps import get_current_active_admin
-from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitLookupResponse, UnitResponse, UnitStatResponse, UnitUpdate, TotalQuotaSystemResponse, UnitQuotaResponse
+from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitLookupResponse, UnitResponse, UnitStatResponse, UnitUpdate, TotalQuotaSystemResponse, UnitQuotaResponse, UnitDetailResponse, AnalyticsOverviewResponse
 from schemas.user_schema import UserCreate, UserLookupResponse, UserResponse
 from services.unit_service import UnitService
 from services.user_service import UserService
@@ -19,6 +19,11 @@ router = APIRouter(prefix="/api/admin", tags=["Admin"], dependencies=[Depends(ge
 
 
 # --- Quản lý Cây đơn vị ---
+
+@router.get("/analytics/overview", response_model=AnalyticsOverviewResponse, summary="Lấy thống kê tổng quan toàn hệ thống")
+async def get_analytics_overview(db: Session = Depends(get_db)):
+    """Admin lấy các chỉ số KPI tổng quát: đơn vị, người dùng, tài liệu, quota"""
+    return UnitService.get_analytics_overview(db)
 
 @router.post("/units", response_model=UnitResponse, status_code=status.HTTP_201_CREATED, summary="Tạo đơn vị mới")
 async def create_unit(data: UnitCreate, db: Session = Depends(get_db)):
@@ -175,3 +180,18 @@ async def lookup_unit_id(name: str, db: Session = Depends(get_db)):
     Giúp Admin rút ngắn quy trình tìm kiếm ID khi quản lý cây đơn vị tổ chức.
     """
     return UnitService.get_unit_id_by_name(db, name)
+
+
+@router.get(
+    "/units/{unit_id}",
+    response_model=UnitDetailResponse,
+    summary="Lấy chi tiết đơn vị và danh sách thành viên",
+    status_code=status.HTTP_200_OK
+)
+async def get_unit_detail(unit_id: UUID, db: Session = Depends(get_db)):
+    """
+    [Đặc quyền Admin] Lấy thông tin chi tiết một phòng ban bao gồm:
+    - Các số liệu thống kê (thành viên, tài liệu, quota)
+    - Danh sách thành viên trực thuộc phòng ban đó.
+    """
+    return UnitService.get_unit_detail(db, unit_id)
