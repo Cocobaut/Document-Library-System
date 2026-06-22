@@ -1,0 +1,213 @@
+{
+    "info": {
+        "_postman_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+        "name": "Document Library System - Admin APIs",
+        "description": "Bộ sưu tập các API dành riêng cho quyền quản trị viên (Admin) để quản lý Người dùng, Đơn vị phòng ban, Quota lưu trữ và Thống kê tài liệu.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Quản lý Người dùng",
+            "item": [
+                {
+                    "name": "Lấy danh sách tất cả người dùng",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/admin/users",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "admin",
+                                "users"
+                            ]
+                        },
+                        "description": "[Đặc quyền Admin] Lấy toàn bộ danh sách tài khoản người dùng trên hệ thống. Dữ liệu trả về tự động ẩn mật khẩu băm thông qua UserResponse Schema."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Quản lý Đơn vị Phòng ban",
+            "item": [
+                {
+                    "name": "Lấy danh sách đơn vị kèm thống kê số liệu",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/admin/units/stats",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "admin",
+                                "units",
+                                "stats"
+                            ]
+                        },
+                        "description": "[Đặc quyền Admin] Lấy toàn bộ danh sách phòng ban, hệ thống tự động tính toán gộp số lượng thành viên (user_count) và số lượng tài liệu (document_count)."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Cập nhật thông tin đơn vị phòng ban",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}",
+                                "type": "text"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"Phòng Phát Triển Phần Mềm Cải Tiến\",\n    \"quota_bytes\": 50000000000,\n    \"manager_user_id\": \"00000000-0000-0000-0000-000000000000\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/admin/units/3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "admin",
+                                "units",
+                                "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                            ],
+                            "description": "Thay thế '3fa85f64-5717-4562-b3fc-2c963f66afa6' bằng unit_id dạng UUID thực tế cần update."
+                        },
+                        "description": "[Đặc quyền Admin] Chỉnh sửa linh hoạt thông tin phòng ban: Tên (name), Dung lượng lưu trữ (quota_bytes), hoặc Quản lý (manager_user_id)."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Quản lý Hạn mức & Quota",
+            "item": [
+                {
+                    "name": "Lấy tổng hạn mức quota toàn hệ thống",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/admin/quota/system",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "admin",
+                                "quota",
+                                "system"
+                            ]
+                        },
+                        "description": "[Đặc quyền Admin] Trả về tổng dung lượng lưu trữ (Bytes) của toàn bộ hệ thống bằng cách cộng dồn quota của tất cả các đơn vị lại với nhau."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Lấy danh sách quota theo từng đơn vị phòng ban",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/admin/quota/units",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "admin",
+                                "quota",
+                                "units"
+                            ]
+                        },
+                        "description": "[Đặc quyền Admin] Trả về danh sách chi tiết tất cả các phòng ban kèm theo mã ID, tên phòng ban và hạn mức quota lưu trữ tương ứng của từng nơi."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Thống kê Tài liệu",
+            "item": [
+                {
+                    "name": "Lấy thống kê số lượng tài liệu toàn công ty và từng đơn vị",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{admin_token}}",
+                                "type": "text"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/admin/documents/statistics",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "admin",
+                                "documents",
+                                "statistics"
+                            ]
+                        },
+                        "description": "API dành riêng cho Admin tối cao để theo dõi tổng số lượng tài liệu đang được lưu trữ trên toàn hệ thống và bóc tách cụ thể theo từng phòng ban."
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "admin_token",
+            "value": "YOUR_ADMIN_JWT_TOKEN_HERE",
+            "type": "string"
+        }
+    ]
+}

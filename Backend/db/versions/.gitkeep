@@ -1,0 +1,4 @@
+# db/versions/
+# Thư mục chứa các file script migration tự động sinh bởi Alembic.
+# Mỗi file đại diện cho một phiên bản cập nhật cấu trúc bảng Database.
+# Chạy lệnh: alembic revision --autogenerate -m "mô tả thay đổi"
