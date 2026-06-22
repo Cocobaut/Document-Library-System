@@ -194,8 +194,6 @@ interface ApiDoc {
   created_at: string;
   file_path?: string;
   folder_id?: string | null;
-  bookmarked?: boolean;
-  is_bookmarked?: boolean;
 }
 
 interface DocListResponse {
@@ -266,39 +264,6 @@ async function shareDocumentApi(documentId: string, username: string, unitId: st
   return res.json();
 }
 
-async function fetchBookmarksApi(): Promise<string[]> {
-  const res = await fetch(`${API_BASE}/bookmark/`, {
-    headers: authHeaders(),
-  });
-  if (!res.ok) return [];
-  return res.json();
-}
-
-async function markBookmarkApi(documentId: string): Promise<any> {
-  const res = await fetch(`${API_BASE}/bookmark/${documentId}`, {
-    method: "POST",
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.detail ?? "Failed to add bookmark");
-  }
-  return res.json().catch(() => null);
-}
-
-async function removeBookmarkApi(documentId: string): Promise<any> {
-  const res = await fetch(`${API_BASE}/bookmark/${documentId}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
-  if (!res.ok && res.status !== 204) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.detail ?? "Failed to remove bookmark");
-  }
-  if (res.status !== 204) return res.json().catch(() => null);
-  return null;
-}
-
 function apiDocToDoc(d: ApiDoc, section: DocSection): Doc {
   return {
     id: d.document_id,
@@ -310,7 +275,7 @@ function apiDocToDoc(d: ApiDoc, section: DocSection): Doc {
     uploadDate: d.created_at ? new Date(d.created_at).toISOString().slice(0, 10) : "",
     isPublic: d.is_public ?? false,
     section,
-    bookmarked: d.bookmarked ?? d.is_bookmarked ?? false,
+    bookmarked: false,
     status: "active",
   };
 }
@@ -550,6 +515,7 @@ const NAV_ITEMS: Record<Role, Array<{ id:string; label:string; icon:React.ReactN
     { id:"home", label:"Home", icon:<Home size={17}/> },
     { id:"documents", label:"My Documents", icon:<FileText size={17}/> },
     { id:"upload", label:"Upload", icon:<Upload size={17}/> },
+    { id:"bookmarks", label:"Bookmarks", icon:<Bookmark size={17}/> },
   ],
   manager: [
     { id:"home", label:"Dashboard", icon:<LayoutDashboard size={17}/> },
@@ -787,16 +753,11 @@ function DocumentsTab({ role }: { role: Role }) {
     setLoading(true);
     setFetchError("");
     try {
-      const [data, bookmarks] = await Promise.all([
-        fetchDocumentsApi(1, 100),
-        fetchBookmarksApi()
-      ]);
-      const isBookmarked = (id: string) => bookmarks.includes(id);
-      
+      const data = await fetchDocumentsApi(1, 100);
       const allDocs: Doc[] = [
-        ...data.items.personal.map(d => ({ ...apiDocToDoc(d, "mine"), bookmarked: isBookmarked(d.document_id) })),
-        ...data.items.shared.map(d => ({ ...apiDocToDoc(d, "shared"), bookmarked: isBookmarked(d.document_id) })),
-        ...data.items.unit_inherited.map(d => ({ ...apiDocToDoc(d, "inherited"), bookmarked: isBookmarked(d.document_id) })),
+        ...data.items.personal.map(d => apiDocToDoc(d, "mine")),
+        ...data.items.shared.map(d => apiDocToDoc(d, "shared")),
+        ...data.items.unit_inherited.map(d => apiDocToDoc(d, "inherited")),
       ];
       setDocs(allDocs);
       setTotals(data.totals);
@@ -833,20 +794,9 @@ function DocumentsTab({ role }: { role: Role }) {
     { key:"inherited", label:"Inherited Documents",      desc:"Organization-wide documents" },
   ];
 
-  const onBookmark = async (id: string) => {
-    const doc = docs.find(d => d.id === id);
-    if (!doc) return;
-    try {
-      if (doc.bookmarked) {
-        await removeBookmarkApi(id);
-      } else {
-        await markBookmarkApi(id);
-      }
-      setDocs(p => p.map(d => d.id === id ? { ...d, bookmarked: !doc.bookmarked } : d));
-      showToast(doc.bookmarked ? "Bookmark removed" : "Bookmark added", "success");
-    } catch (err: any) {
-      showToast(err.message || "Failed to update bookmark", "error");
-    }
+  const onBookmark = (id: string) => {
+    setDocs(p => p.map(d => d.id === id ? { ...d, bookmarked: !d.bookmarked } : d));
+    showToast("Bookmark updated", "info");
   };
   const onTogglePublic = (id: string) => {
     setDocs(p => p.map(d => d.id === id ? { ...d, isPublic: !d.isPublic } : d));
