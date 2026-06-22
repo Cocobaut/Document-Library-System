@@ -22,6 +22,10 @@ class BookmarkRepository:
         ).first()
 
     @staticmethod
+    def get_all_by_user(db: Session, user_id) -> list[Bookmark]:
+        return db.query(Bookmark).filter(Bookmark.user_id == user_id).all()
+
+    @staticmethod
     def create(db: Session, bookmark: Bookmark) -> Bookmark:
         """Thêm bản ghi bookmark mới vào cơ sở dữ liệu"""
         db.add(bookmark)

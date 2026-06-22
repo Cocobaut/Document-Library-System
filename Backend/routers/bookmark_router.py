@@ -13,6 +13,14 @@ from repositories.bookmark_repository import BookmarkRepository
 
 router = APIRouter(prefix="/api/bookmark", tags=["Tài liệu"])
 
+@router.get("/", response_model=list[UUID], summary="Lấy danh sách tài liệu đã đánh dấu sao")
+async def get_bookmarks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    bookmarks = BookmarkRepository.get_all_by_user(db, current_user.user_id)
+    return [b.document_id for b in bookmarks]
+
 @router.post("/{document_id}", status_code=status.HTTP_201_CREATED, summary="Đánh dấu sao")
 async def add_bookmark(
     document_id: UUID,

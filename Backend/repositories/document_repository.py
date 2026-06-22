@@ -67,6 +67,15 @@ class DocumentRepository:
         )
 
     @staticmethod
+    def count_inherited_documents(db: Session, ancestor_unit_ids: list, exclude_owner_id) -> int:
+        """Đếm số lượng tài liệu kế thừa (public từ các đơn vị cha)"""
+        return db.query(Document).filter(
+            Document.unit_id.in_(ancestor_unit_ids),
+            Document.is_public == True,
+            Document.owner_id != exclude_owner_id
+        ).count()
+
+    @staticmethod
     def create(db: Session, document: Document) -> Document:
         """Thêm tài liệu mới vào database"""
         db.add(document)

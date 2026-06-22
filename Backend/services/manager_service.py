@@ -13,10 +13,11 @@ from uuid import UUID
 
 class ManagerService:
     @staticmethod
-    def get_unit_storage_stats(db: Session, unit_id: UUID) -> UnitStorageStats:
+    def get_unit_storage_stats(db: Session, manager: User) -> UnitStorageStats:
         """
         Tính toán và tổng hợp các chỉ số dung lượng lưu trữ của một đơn vị phòng ban.
         """
+        unit_id = manager.unit_id
         unit = UnitRepository.get_by_id(db, unit_id)
         if not unit:
             raise HTTPException(
@@ -27,6 +28,10 @@ class ManagerService:
         total_users = UserRepository.count_by_unit(db, unit_id)
 
         total_documents = DocumentRepository.count_by_unit_users(db, unit_id)
+
+        all_units = UnitRepository.get_all(db)
+        ancestor_unit_ids = [u.unit_id for u in all_units if unit.path and u.path is not None and unit.path.startswith(u.path)]
+        inherited_documents = DocumentRepository.count_inherited_documents(db, ancestor_unit_ids, exclude_owner_id=manager.user_id)
 
         total_used_bytes = UserRepository.sum_used_bytes_by_unit(db, unit_id)
 
@@ -45,7 +50,8 @@ class ManagerService:
             free_bytes=free_bytes,
             usage_percent=usage_percent,
             total_documents=total_documents,
-            total_users=total_users
+            total_users=total_users,
+            inherited_documents=inherited_documents
         )
 
     @staticmethod
@@ -88,6 +94,10 @@ class ManagerService:
         unit_quota_for_calc = unit_quota if unit_quota > 0 else 1
         unit_usage_percent = round((total_unit_used_bytes / unit_quota_for_calc) * 100, 2)
 
+        all_units = UnitRepository.get_all(db)
+        ancestor_unit_ids = [u.unit_id for u in all_units if unit.path and u.path is not None and unit.path.startswith(u.path)]
+        inherited_documents = DocumentRepository.count_inherited_documents(db, ancestor_unit_ids, manager_user.user_id)
+
         unit_stats = UnitStorageStats(
             unit_id=unit.unit_id,
             unit_name=unit.name,
@@ -96,7 +106,8 @@ class ManagerService:
             free_bytes=unit_free_bytes,
             usage_percent=unit_usage_percent,
             total_documents=total_unit_documents,
-            total_users=total_unit_users
+            total_users=total_unit_users,
+            inherited_documents=inherited_documents
         )
 
         return UnitDetailedReport(

@@ -15,6 +15,7 @@ class UnitStorageStats(BaseModel):
     usage_percent: float = Field(..., description="Phần trăm đã sử dụng")
     total_documents: int = Field(..., description="Tổng số tài liệu")
     total_users: int = Field(..., description="Tổng số người dùng")
+    inherited_documents: int = Field(..., description="Số lượng tài liệu được kế thừa")
 
 
 class UserStorageStats(BaseModel):

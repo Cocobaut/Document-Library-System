@@ -15,6 +15,8 @@ from schemas.manager_schema import UnitStorageStats, UnitDetailedReport, UserSto
 from services.user_service import UserService
 from services.manager_service import ManagerService
 from schemas.document_schema import DocumentResponse, DocumentUpdatePublicPayload
+from schemas.user_schema import UserResponse
+from repositories.user_repository import UserRepository
 from typing import List
 
 from uuid import UUID
@@ -41,9 +43,26 @@ async def get_unit_storage_stats(
             detail="Tài khoản quản trị của bạn chưa được gán cố định vào bất kỳ đơn vị nào.",
         )
 
-    stats = ManagerService.get_unit_storage_stats(db=db, unit_id=current_user.unit_id)
+    stats = ManagerService.get_unit_storage_stats(db=db, manager=current_user)
     
     return stats
+
+
+@router.get("/users", response_model=List[UserResponse], summary="Lấy danh sách người dùng trong đơn vị")
+async def get_manager_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_unit_manager),
+):
+    """
+    Lấy danh sách tất cả các người dùng (User) thuộc cùng đơn vị với Unit Manager.
+    """
+    if not current_user.unit_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tài khoản quản lý của bạn chưa được chỉ định thuộc về bất kỳ đơn vị nào.",
+        )
+    users = UserRepository.get_by_unit(db, current_user.unit_id)
+    return users
 
 
 @router.post("/documents/upload", summary="Upload tài liệu vùng chung đơn vị", response_model=DocumentResponse)
