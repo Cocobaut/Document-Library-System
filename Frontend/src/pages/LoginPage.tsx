@@ -4,7 +4,7 @@ import { Role } from "../types";
 import { loginApi, decodeJwtPayload, ROLE_MAP } from "../services/authApi";
 import { Field, TextInput } from "../components/DesignSystem";
 
-export function LoginPage({ onLogin }: { onLogin: (token: string, role: Role, username: string, userId: string) => void }) {
+export function LoginPage({ onLogin }: { onLogin: (token: string, role: Role, username: string, userId: string, unitName?: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -29,7 +29,7 @@ export function LoginPage({ onLogin }: { onLogin: (token: string, role: Role, us
       if (!payload) { setError("Invalid token received from server."); setLoading(false); return; }
       const role = ROLE_MAP[payload.role?.toUpperCase()];
       if (!role) { setError("Unknown user role. Please contact your administrator."); setLoading(false); return; }
-      onLogin(data.access_token, role, payload.username, payload.sub);
+      onLogin(data.access_token, role, payload.username, payload.sub, payload.unit_name);
     } catch (err: any) {
       setError(err.message || "Login failed. Please try again.");
       setLoading(false);

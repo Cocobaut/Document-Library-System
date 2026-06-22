@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Search, RefreshCw, SlidersHorizontal, FolderOpen, Users, Building2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Role, Doc, DocSection, Modal } from "../../types";
-import { fetchDocumentsApi, fetchBookmarksApi, removeBookmarkApi, markBookmarkApi, shareDocumentApi, apiDocToDoc } from "../../services/documentApi";
-import { TextInput, SelectInput, Btn } from "../../components/DesignSystem";
+import { fetchDocumentsApi, fetchBookmarksApi, removeBookmarkApi, markBookmarkApi, shareDocumentApi, apiDocToDoc, fetchAllUnitsApi } from "../../services/documentApi";
+import { TextInput, SelectInput, Btn, Field } from "../../components/DesignSystem";
 import { ModalShell, Confirm, ToastBar } from "../../components/Modal";
 import { DocRow } from "../../components/DocumentRow";
 
@@ -19,6 +19,7 @@ export function DocumentsTab({ role }: { role: Role }) {
   const [toast, setToast] = useState<{ msg:string; type:"success"|"error"|"info" }|null>(null);
   const [shareForm, setShareForm] = useState({ username: "", unitId: "" });
   const [shareLoading, setShareLoading] = useState(false);
+  const [units, setUnits] = useState<{unit_id: string, name: string}[]>([]);
 
   const loadDocs = async () => {
     setLoading(true);
@@ -44,7 +45,10 @@ export function DocumentsTab({ role }: { role: Role }) {
     }
   };
 
-  useEffect(() => { loadDocs(); }, []);
+  useEffect(() => {
+    loadDocs();
+    fetchAllUnitsApi().then(setUnits).catch(() => {});
+  }, []);
 
   const PER_PAGE = 5;
 
@@ -104,7 +108,7 @@ export function DocumentsTab({ role }: { role: Role }) {
     }
     setShareLoading(true);
     try {
-      await shareDocumentApi(modal.doc.id, shareForm.username.trim(), shareForm.unitId.trim());
+      await shareDocumentApi(modal.doc.id, shareForm.username.trim(), shareForm.unitId.trim(), "view");
       showToast("Document shared successfully");
       setModal(null);
       setShareForm({ username: "", unitId: "" });
@@ -228,8 +232,13 @@ export function DocumentsTab({ role }: { role: Role }) {
             <Field label="Username">
               <TextInput value={shareForm.username} onChange={v => setShareForm(p => ({ ...p, username: v }))} placeholder="Enter username to share with…" icon={<Users size={14}/>} />
             </Field>
-            <Field label="Unit ID">
-              <TextInput value={shareForm.unitId} onChange={v => setShareForm(p => ({ ...p, unitId: v }))} placeholder="Enter recipient's unit UUID…" icon={<Building2 size={14}/>} />
+            <Field label="Department">
+              <SelectInput value={shareForm.unitId} onChange={v => setShareForm(p => ({ ...p, unitId: v }))}>
+                <option value="">Select department...</option>
+                {units.map(u => (
+                  <option key={u.unit_id} value={u.unit_id}>{u.name}</option>
+                ))}
+              </SelectInput>
             </Field>
             <div className="flex gap-3 justify-end pt-1">
               <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>

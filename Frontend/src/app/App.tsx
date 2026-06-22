@@ -13,13 +13,14 @@ export default function App() {
   const [view, setView] = useState<"login"|"app">(stored ? "app" : "login");
   const [role, setRole] = useState<Role>(stored?.role ?? "user");
   const [user, setUser] = useState<UserRecord>(
-    stored ? buildUserFromAuth({ username: stored.username, role: stored.role, userId: stored.userId }) : defaultUser
+    stored ? buildUserFromAuth({ username: stored.username, role: stored.role, userId: stored.userId, unitName: stored.unitName }) : defaultUser
   );
   const [activeNav, setActiveNav] = useState(stored?.role === "admin" ? "units" : "home");
+  const [navKey, setNavKey] = useState(0);
 
-  const handleLogin = (token: string, r: Role, username: string, userId: string) => {
+  const handleLogin = (token: string, r: Role, username: string, userId: string, unitName?: string) => {
     localStorage.setItem("access_token", token);
-    const userRecord = buildUserFromAuth({ username, role: r, userId });
+    const userRecord = buildUserFromAuth({ username, role: r, userId, unitName });
     setRole(r);
     setUser(userRecord);
     setView("app");
@@ -32,17 +33,22 @@ export default function App() {
     setRole("user");
   };
 
+  const handleNavClick = (id: string) => {
+    setActiveNav(id);
+    setNavKey(k => k + 1);
+  };
+
   if (view === "login") return <LoginPage onLogin={handleLogin}/>;
 
   const renderMain = () => {
     if (role === "admin")   return <AdminDashboard user={user} activeNav={activeNav}/>;
     if (role === "manager") return <ManagerDashboard user={user} activeNav={activeNav}/>;
-    return <UserDashboard user={user} activeNav={activeNav}/>;
+    return <UserDashboard user={user} activeNav={activeNav} navKey={navKey}/>;
   };
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar role={role} active={activeNav} setActive={setActiveNav} onLogout={handleLogout} user={user}/>
+      <Sidebar role={role} active={activeNav} setActive={handleNavClick} onLogout={handleLogout} user={user}/>
       <div className="flex flex-col flex-1 overflow-hidden">
         {renderMain()}
       </div>

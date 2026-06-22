@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/documents", tags=["Tài liệu"])
 @router.get("/", response_model=DocumentListResponse, summary="Trang chính - Danh sách tài liệu")
 async def get_documents(
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page_size: int = Query(default=50, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -45,6 +45,18 @@ async def get_documents(
         "page_size": page_size,
         "total_pages": total_pages
     }
+
+
+@router.get("/units", summary="Lấy danh sách tất cả phòng ban (đơn vị)")
+async def get_all_units(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from models.unit_model import Unit
+    units = db.query(Unit).all()
+    return [{"unit_id": str(u.unit_id), "name": u.name} for u in units]
+
+
 
 
 @router.get("/{document_id}", response_model=DocumentResponse, summary="Chi tiết tài liệu")

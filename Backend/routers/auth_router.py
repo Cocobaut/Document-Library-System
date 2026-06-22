@@ -32,7 +32,12 @@ async def login(payload: LoginPayload, db: Session = Depends(get_db)):
         )
     
     access_token = create_access_token(
-        data={"sub": str(user.user_id), "username": user.username, "role": user.role},
+        data={
+            "sub": str(user.user_id),
+            "username": user.username,
+            "role": user.role,
+            "unit_name": user.unit.name if user.unit else ""
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 

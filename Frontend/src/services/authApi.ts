@@ -8,7 +8,7 @@ export const ROLE_MAP: Record<string, Role> = {
   ADMIN: "admin",
 };
 
-export function decodeJwtPayload(token: string): { sub: string; username: string; role: string } | null {
+export function decodeJwtPayload(token: string): { sub: string; username: string; role: string; unit_name?: string } | null {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
@@ -32,7 +32,7 @@ export async function loginApi(username: string, password: string): Promise<{ ac
   return res.json();
 }
 
-export function getStoredAuth(): { token: string; role: Role; username: string; userId: string } | null {
+export function getStoredAuth(): { token: string; role: Role; username: string; userId: string; unitName: string } | null {
   try {
     const token = localStorage.getItem("access_token");
     if (!token) return null;
@@ -46,21 +46,21 @@ export function getStoredAuth(): { token: string; role: Role; username: string; 
       localStorage.removeItem("access_token");
       return null;
     }
-    return { token, role, username: payload.username, userId: payload.sub };
+    return { token, role, username: payload.username, userId: payload.sub, unitName: payload.unit_name || "" };
   } catch {
     localStorage.removeItem("access_token");
     return null;
   }
 }
 
-export function buildUserFromAuth(auth: { username: string; role: Role; userId: string }): UserRecord {
+export function buildUserFromAuth(auth: { username: string; role: Role; userId: string; unitName?: string }): UserRecord {
   const initials = auth.username.split(".").map(p => p[0]?.toUpperCase() ?? "").join("").slice(0, 2) || "U";
   return {
     id: auth.userId,
     name: auth.username,
     email: "",
     role: auth.role,
-    unit: "",
+    unit: auth.unitName || "",
     status: "active",
     storageUsed: 0,
     storageQuota: 0,

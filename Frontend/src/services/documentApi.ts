@@ -70,6 +70,14 @@ export async function fetchUnitsStatsApi(): Promise<UnitStatResponse[]> {
   return res.json();
 }
 
+export async function fetchAllUnitsApi(): Promise<{unit_id: string, name: string}[]> {
+  const res = await fetch(`${API_BASE}/documents/units`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to load units");
+  return res.json();
+}
+
 export interface UnitDetailMember {
   full_name: string;
   role: string;
@@ -278,11 +286,11 @@ export async function uploadFolderApi(files: File[]): Promise<ApiDoc[]> {
   return res.json();
 }
 
-export async function shareDocumentApi(documentId: string, username: string, unitId: string): Promise<any> {
+export async function shareDocumentApi(documentId: string, username: string, unitId: string, permission: string = "view"): Promise<any> {
   const res = await fetch(`${API_BASE}/documents/${documentId}/share`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ username, unit_id: unitId }),
+    body: JSON.stringify({ username, unit_id: unitId, permission }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
