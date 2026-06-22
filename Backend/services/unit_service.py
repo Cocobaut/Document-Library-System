@@ -5,13 +5,13 @@ from fastapi import HTTPException, status
 from repositories.document_repository import DocumentRepository
 from models.user_model import User
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, func
 
 from models.unit_model import Unit
-from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitDocumentStat, UnitUpdate, UnitLookupResponse, UnitDetailResponse, UnitDetailMember
+from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitDocumentStat, UnitUpdate, UnitLookupResponse, UnitDetailResponse, UnitDetailMember, AnalyticsOverviewResponse
 from core.exceptions import DocumentNotFoundException
 from repositories.unit_repository import UnitRepository
-
+from models.document_model import Document
 from uuid import UUID
 
 class UnitService:
@@ -244,10 +244,6 @@ class UnitService:
 
     @staticmethod
     def get_analytics_overview(db: Session):
-        from models.document_model import Document
-        from sqlalchemy import func
-        from schemas.unit_schema import AnalyticsOverviewResponse
-        
         total_units = db.query(Unit).count()
         total_users = db.query(User).count()
         total_documents = db.query(Document).count()

@@ -13,6 +13,7 @@ class DocumentCreate(BaseModel):
     unit_id: UUID = Field(..., description="Mã đơn vị sở hữu")
     folder_id: Optional[UUID] = Field(None, description="ID của folder nếu được upload theo dạng thư mục. Upload đơn lẻ sẽ là null.")
 
+
 class DocumentUpdate(BaseModel):
     """Schema cập nhật metadata tài liệu"""
     title: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -72,6 +73,7 @@ class DocumentUpdatePublicPayload(BaseModel):
         ..., 
         description="Trạng thái công khai mới (True: công khai đơn vị, False: riêng tư)"
     )
+
 
 class DocumentShareResponse(BaseModel):
     """Schema phản hồi khi thực hiện chia sẻ tài liệu thành công"""

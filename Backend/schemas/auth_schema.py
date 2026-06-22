@@ -14,6 +14,7 @@ class ChangePasswordPayload(BaseModel):
     old_password: str = Field(..., min_length=1, description="Mật khẩu hiện tại")
     new_password: str = Field(..., min_length=6, max_length=100, description="Mật khẩu mới (Tối thiểu 6 ký tự)")
 
+
 class TokenResponse(BaseModel):
     """Schema đầu ra khi đăng nhập thành công"""
     access_token: str = Field(..., description="JWT Access Token")

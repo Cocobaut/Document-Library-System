@@ -113,6 +113,7 @@ class UnitLookupResponse(BaseModel):
     name: str
     unit_id: UUID = Field(..., description="Mã định danh UUID của đơn vị phòng ban")
 
+
 class AnalyticsOverviewResponse(BaseModel):
     total_units: int
     total_users: int
