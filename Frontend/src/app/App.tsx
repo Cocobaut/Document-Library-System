@@ -62,18 +62,7 @@ interface QueueFile {
   type: string;
 }
 
-// ─── Seed Data ────────────────────────────────────────────────────────────────
-
-const DOCS: Doc[] = [
-  { id:"d1", name:"Q3 2024 Financial Report.pdf", type:"pdf", size:"2.4 MB", owner:"Alex Chen", ownerId:"u1", uploadDate:"2024-11-12", isPublic:false, section:"mine", bookmarked:true, status:"active" },
-  { id:"d2", name:"Product Roadmap H2 2024.pptx", type:"pptx", size:"8.1 MB", owner:"Alex Chen", ownerId:"u1", uploadDate:"2024-11-08", isPublic:true, section:"mine", bookmarked:false, status:"active" },
-  { id:"d3", name:"Employee Handbook v3.docx", type:"docx", size:"1.2 MB", owner:"Alex Chen", ownerId:"u1", uploadDate:"2024-10-30", isPublic:false, section:"mine", bookmarked:false, status:"draft" },
-  { id:"d4", name:"Sales Analytics Dashboard.xlsx", type:"xlsx", size:"3.7 MB", owner:"Maria Santos", ownerId:"u2", uploadDate:"2024-11-15", isPublic:false, section:"shared", bookmarked:true, status:"active", sharedWith:["Alex Chen"] },
-  { id:"d5", name:"Brand Guidelines 2024.pdf", type:"pdf", size:"15.3 MB", owner:"Tom Walker", ownerId:"u3", uploadDate:"2024-11-01", isPublic:true, section:"shared", bookmarked:false, status:"active" },
-  { id:"d6", name:"IT Security Policy v2.pdf", type:"pdf", size:"0.8 MB", owner:"IT Department", ownerId:"dept", uploadDate:"2024-09-15", isPublic:true, section:"inherited", bookmarked:false, status:"active" },
-  { id:"d7", name:"Annual Leave Policy 2024.docx", type:"docx", size:"0.4 MB", owner:"HR Department", ownerId:"dept", uploadDate:"2024-08-20", isPublic:true, section:"inherited", bookmarked:true, status:"active" },
-  { id:"d8", name:"Onboarding Checklist Q4.xlsx", type:"xlsx", size:"0.6 MB", owner:"Operations", ownerId:"dept", uploadDate:"2024-07-10", isPublic:true, section:"inherited", bookmarked:false, status:"active" },
-];
+// ─── Seed Data (Admin UI only) ────────────────────────────────────────────────
 
 const USERS: UserRecord[] = [
   { id:"u1", name:"Alex Chen", email:"alex.chen@acme.com", role:"user", unit:"Engineering", status:"active", storageUsed:4.2, storageQuota:10, lastLogin:"2024-11-15 09:42", avatar:"AC", joined:"2023-03-12" },
@@ -95,13 +84,7 @@ const UNITS: Unit[] = [
   { id:"un6", name:"Operations", manager:"Ryan Cho", members:15, documents:289, storageUsed:31.5, storageQuota:75, description:"Business processes and logistics" },
 ];
 
-const UPLOAD_HISTORY: QueueFile[] = [
-  { id:"h1", name:"Q4 Budget Forecast.xlsx", rawSize:2.1*1024*1024, progress:100, status:"done", type:"xlsx" },
-  { id:"h2", name:"Marketing Assets Pack.zip", rawSize:48.7*1024*1024, progress:100, status:"done", type:"zip" },
-  { id:"h3", name:"Meeting Notes Nov.docx", rawSize:0.3*1024*1024, progress:100, status:"done", type:"docx" },
-  { id:"h4", name:"System Architecture v2.pdf", rawSize:5.6*1024*1024, progress:65, status:"uploading", type:"pdf" },
-  { id:"h5", name:"Legacy Data Export.csv", rawSize:112*1024*1024, progress:0, status:"error", type:"csv" },
-];
+
 
 const AREA_DATA = [
   { month:"Jun", uploads:42, downloads:89 },
@@ -126,11 +109,176 @@ const PIE_DATA = [
   { name:"Others", value:40.4, color:"#94A3B8" },
 ];
 
-const CREDENTIALS: Record<string, { pass: string; role: Role }> = {
-  "alex.chen": { pass:"user123", role:"user" },
-  "maria.santos": { pass:"mgr123", role:"manager" },
-  "nina.patel": { pass:"admin123", role:"admin" },
+// ─── Auth API ─────────────────────────────────────────────────────────────────
+
+const API_BASE = "/api";
+
+const ROLE_MAP: Record<string, Role> = {
+  USER: "user",
+  UNIT_MANAGER: "manager",
+  ADMIN: "admin",
 };
+
+function decodeJwtPayload(token: string): { sub: string; username: string; role: string } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function loginApi(username: string, password: string): Promise<{ access_token: string; token_type: string }> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Đăng nhập thất bại. Vui lòng thử lại.");
+  }
+  return res.json();
+}
+
+function getStoredAuth(): { token: string; role: Role; username: string; userId: string } | null {
+  try {
+    const token = localStorage.getItem("access_token");
+    if (!token) return null;
+    const payload = decodeJwtPayload(token);
+    if (!payload) return null;
+    const role = ROLE_MAP[payload.role?.toUpperCase()] ?? null;
+    if (!role) return null;
+    // Check expiration
+    const fullPayload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (fullPayload.exp && fullPayload.exp * 1000 < Date.now()) {
+      localStorage.removeItem("access_token");
+      return null;
+    }
+    return { token, role, username: payload.username, userId: payload.sub };
+  } catch {
+    localStorage.removeItem("access_token");
+    return null;
+  }
+}
+
+function buildUserFromAuth(auth: { username: string; role: Role; userId: string }): UserRecord {
+  const initials = auth.username.split(".").map(p => p[0]?.toUpperCase() ?? "").join("").slice(0, 2) || "U";
+  return {
+    id: auth.userId,
+    name: auth.username,
+    email: "",
+    role: auth.role,
+    unit: "",
+    status: "active",
+    storageUsed: 0,
+    storageQuota: 0,
+    lastLogin: new Date().toISOString().slice(0, 16).replace("T", " "),
+    avatar: initials,
+    joined: "",
+  };
+}
+
+// ─── Document API ─────────────────────────────────────────────────────────────
+
+interface ApiDoc {
+  document_id: string;
+  title: string;
+  owner_id: string;
+  unit_id: string;
+  file_type: string;
+  file_size: number;
+  is_public: boolean;
+  created_at: string;
+  file_path?: string;
+  folder_id?: string | null;
+}
+
+interface DocListResponse {
+  items: { personal: ApiDoc[]; shared: ApiDoc[]; unit_inherited: ApiDoc[] };
+  totals: { personal: number; shared: number; unit_inherited: number };
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("access_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchDocumentsApi(page = 1, pageSize = 100): Promise<DocListResponse> {
+  const res = await fetch(`${API_BASE}/documents/?page=${page}&page_size=${pageSize}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to load documents");
+  }
+  return res.json();
+}
+
+async function uploadDocumentApi(file: File, title?: string): Promise<ApiDoc> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (title) fd.append("title", title);
+  const res = await fetch(`${API_BASE}/documents/upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Upload failed");
+  }
+  return res.json();
+}
+
+async function uploadFolderApi(files: File[]): Promise<ApiDoc[]> {
+  const fd = new FormData();
+  files.forEach(f => fd.append("files", f));
+  const res = await fetch(`${API_BASE}/documents/upload-folder`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Folder upload failed");
+  }
+  return res.json();
+}
+
+async function shareDocumentApi(documentId: string, username: string, unitId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/documents/${documentId}/share`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ username, unit_id: unitId }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to share document");
+  }
+  return res.json();
+}
+
+function apiDocToDoc(d: ApiDoc, section: DocSection): Doc {
+  return {
+    id: d.document_id,
+    name: d.title || "Untitled",
+    type: (d.file_type?.toLowerCase().replace(".", "") || "txt") as FileType,
+    size: fmtSize(d.file_size || 0),
+    owner: d.owner_id,
+    ownerId: d.owner_id,
+    uploadDate: d.created_at ? new Date(d.created_at).toISOString().slice(0, 10) : "",
+    isPublic: d.is_public ?? false,
+    section,
+    bookmarked: false,
+    status: "active",
+  };
+}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -588,13 +736,39 @@ function DocRow({
 // ─── Documents Tab ────────────────────────────────────────────────────────────
 
 function DocumentsTab({ role }: { role: Role }) {
-  const [docs, setDocs] = useState<Doc[]>(DOCS);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [totals, setTotals] = useState({ personal: 0, shared: 0, unit_inherited: 0 });
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sort, setSort] = useState("date-desc");
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState<Modal>(null);
   const [toast, setToast] = useState<{ msg:string; type:"success"|"error"|"info" }|null>(null);
+  const [shareForm, setShareForm] = useState({ username: "", unitId: "" });
+  const [shareLoading, setShareLoading] = useState(false);
+
+  const loadDocs = async () => {
+    setLoading(true);
+    setFetchError("");
+    try {
+      const data = await fetchDocumentsApi(1, 100);
+      const allDocs: Doc[] = [
+        ...data.items.personal.map(d => apiDocToDoc(d, "mine")),
+        ...data.items.shared.map(d => apiDocToDoc(d, "shared")),
+        ...data.items.unit_inherited.map(d => apiDocToDoc(d, "inherited")),
+      ];
+      setDocs(allDocs);
+      setTotals(data.totals);
+    } catch (err: any) {
+      setFetchError(err.message || "Failed to load documents");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadDocs(); }, []);
 
   const PER_PAGE = 5;
 
@@ -635,6 +809,46 @@ function DocumentsTab({ role }: { role: Role }) {
   };
   const showToast = (msg: string, type: "success"|"error"|"info" = "success") => setToast({ msg, type });
 
+  const handleShare = async () => {
+    if (!modal || modal.type !== "share") return;
+    if (!shareForm.username.trim() || !shareForm.unitId.trim()) {
+      showToast("Please fill in all fields", "error");
+      return;
+    }
+    setShareLoading(true);
+    try {
+      await shareDocumentApi(modal.doc.id, shareForm.username.trim(), shareForm.unitId.trim());
+      showToast("Document shared successfully");
+      setModal(null);
+      setShareForm({ username: "", unitId: "" });
+    } catch (err: any) {
+      showToast(err.message || "Failed to share document", "error");
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+        <div className="w-8 h-8 border-3 border-slate-200 border-t-[#2563EB] rounded-full animate-spin mb-4" />
+        <p className="text-sm">Loading documents…</p>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mb-4">
+          <AlertCircle size={22} className="text-red-500" />
+        </div>
+        <p className="text-sm text-red-600 mb-4">{fetchError}</p>
+        <Btn onClick={loadDocs} icon={<RefreshCw size={13}/>}>Retry</Btn>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Toolbar */}
@@ -658,6 +872,7 @@ function DocumentsTab({ role }: { role: Role }) {
         {role !== "user" && (
           <Btn variant="outline" size="md" icon={<SlidersHorizontal size={13}/>}>Bulk Actions</Btn>
         )}
+        <Btn variant="ghost" size="sm" icon={<RefreshCw size={13}/>} onClick={loadDocs}>Refresh</Btn>
         <span className="text-xs text-slate-400 ml-auto">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
       </div>
 
@@ -687,7 +902,7 @@ function DocumentsTab({ role }: { role: Role }) {
                   <DocRow
                     key={doc.id} doc={doc} role={role}
                     onBookmark={onBookmark}
-                    onShare={doc => setModal({ type:"share", doc })}
+                    onShare={doc => { setShareForm({ username: "", unitId: "" }); setModal({ type:"share", doc }); }}
                     onDelete={id => setModal({ type:"delete-doc", id })}
                     onTogglePublic={onTogglePublic}
                   />
@@ -721,32 +936,21 @@ function DocumentsTab({ role }: { role: Role }) {
 
       {/* Share Modal */}
       {modal?.type === "share" && (
-        <ModalShell title={`Share Document`} subtitle={modal.doc.name} onClose={() => setModal(null)}>
+        <ModalShell title="Share Document" subtitle={modal.doc.name} onClose={() => setModal(null)}>
           <div className="space-y-5">
-            <Field label="Share with people">
-              <TextInput value="" onChange={() => {}} placeholder="Name or email…" icon={<Users size={14}/>} />
+            <Field label="Username">
+              <TextInput value={shareForm.username} onChange={v => setShareForm(p => ({ ...p, username: v }))} placeholder="Enter username to share with…" icon={<Users size={14}/>} />
             </Field>
-            <Field label="Permission level">
-              <SelectInput value="view" onChange={() => {}}>
-                <option value="view">View only</option>
-                <option value="comment">Can comment</option>
-                <option value="edit">Can edit</option>
-              </SelectInput>
+            <Field label="Unit ID">
+              <TextInput value={shareForm.unitId} onChange={v => setShareForm(p => ({ ...p, unitId: v }))} placeholder="Enter recipient's unit UUID…" icon={<Building2 size={14}/>} />
             </Field>
-            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
-              <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Share via link</p>
-              <div className="flex gap-2 items-center">
-                <div className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-400 font-mono truncate">
-                  https://doclib.acme.com/s/{modal.doc.id}
-                </div>
-                <Btn size="sm" variant="secondary" onClick={() => { setModal(null); showToast("Link copied to clipboard"); }}>
-                  Copy
-                </Btn>
-              </div>
-            </div>
             <div className="flex gap-3 justify-end pt-1">
               <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
-              <Btn onClick={() => { setModal(null); showToast("Document shared successfully"); }}>Share</Btn>
+              <Btn onClick={handleShare} disabled={shareLoading}>
+                {shareLoading ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Sharing…</>
+                ) : "Share"}
+              </Btn>
             </div>
           </div>
         </ModalShell>
@@ -771,37 +975,65 @@ function DocumentsTab({ role }: { role: Role }) {
 
 function UploadTab({ role }: { role: Role }) {
   const [queue, setQueue] = useState<QueueFile[]>([]);
-  const [history] = useState<QueueFile[]>(UPLOAD_HISTORY);
   const [dragging, setDragging] = useState(false);
+  const [toast, setToast] = useState<{ msg:string; type:"success"|"error"|"info" }|null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
-  const storageUsed = role === "manager" ? 22.1 : 4.2;
-  const storageQuota = role === "manager" ? 50 : 10;
-  const storagePct = (storageUsed / storageQuota) * 100;
+  const showToast = (msg: string, type: "success"|"error"|"info" = "success") => setToast({ msg, type });
 
-  const enqueue = (names: string[]) => {
-    const items: QueueFile[] = names.map((name, i) => ({
-      id: `q${Date.now()}-${i}`,
-      name,
-      rawSize: Math.random() * 20e6 + 100000,
+  const uploadSingleFile = async (file: File) => {
+    const id = `q${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const queueItem: QueueFile = {
+      id,
+      name: file.name,
+      rawSize: file.size,
       progress: 0,
-      status: "queued",
-      type: name.split(".").pop() ?? "bin",
-    }));
-    setQueue(prev => [...prev, ...items]);
-    items.forEach(item => {
-      let p = 0;
-      const iv = setInterval(() => {
-        p += Math.random() * 18 + 4;
-        if (p >= 100) {
-          p = 100;
-          clearInterval(iv);
-          setQueue(prev => prev.map(q => q.id === item.id ? { ...q, progress: 100, status: "done" } : q));
-        } else {
-          setQueue(prev => prev.map(q => q.id === item.id ? { ...q, progress: Math.round(p), status: "uploading" } : q));
-        }
-      }, 250);
+      status: "uploading",
+      type: file.name.split(".").pop() ?? "bin",
+    };
+    setQueue(prev => [...prev, queueItem]);
+    try {
+      await uploadDocumentApi(file);
+      setQueue(prev => prev.map(q => q.id === id ? { ...q, progress: 100, status: "done" } : q));
+      showToast(`Uploaded ${file.name}`, "success");
+    } catch (err: any) {
+      setQueue(prev => prev.map(q => q.id === id ? { ...q, status: "error" } : q));
+      showToast(err.message || `Failed to upload ${file.name}`, "error");
+    }
+  };
+
+  const handleFiles = (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    arr.forEach(file => uploadSingleFile(file));
+  };
+
+  const handleFolderUpload = async (files: FileList | File[]) => {
+    const arr = Array.from(files);
+    if (arr.length === 0) return;
+    const ids = arr.map((file, i) => {
+      const id = `q${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`;
+      return { id, file };
     });
+    const queueItems: QueueFile[] = ids.map(({ id, file }) => ({
+      id,
+      name: file.name,
+      rawSize: file.size,
+      progress: 0,
+      status: "uploading" as const,
+      type: file.name.split(".").pop() ?? "bin",
+    }));
+    setQueue(prev => [...prev, ...queueItems]);
+    try {
+      await uploadFolderApi(arr);
+      const idSet = new Set(ids.map(i => i.id));
+      setQueue(prev => prev.map(q => idSet.has(q.id) ? { ...q, progress: 100, status: "done" } : q));
+      showToast(`Uploaded ${arr.length} files from folder`, "success");
+    } catch (err: any) {
+      const idSet = new Set(ids.map(i => i.id));
+      setQueue(prev => prev.map(q => idSet.has(q.id) ? { ...q, status: "error" } : q));
+      showToast(err.message || "Folder upload failed", "error");
+    }
   };
 
   return (
@@ -812,12 +1044,15 @@ function UploadTab({ role }: { role: Role }) {
         <div
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
-          onDrop={e => { e.preventDefault(); setDragging(false); enqueue(["Dropped File.pdf"]); }}
+          onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files); }}
           onClick={() => inputRef.current?.click()}
           className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragging ? "border-[#2563EB] bg-blue-50 scale-[1.01]" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30"}`}
         >
           <input ref={inputRef} type="file" multiple className="hidden"
-            onChange={e => { enqueue(Array.from(e.target.files ?? []).map(f => f.name)); }} />
+            onChange={e => { if (e.target.files?.length) { handleFiles(e.target.files); e.target.value = ""; } }} />
+          <input ref={folderInputRef} type="file" multiple className="hidden"
+            {...({ webkitdirectory: "true", directory: "true" } as any)}
+            onChange={e => { if (e.target.files?.length) { handleFolderUpload(e.target.files); e.target.value = ""; } }} />
           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-colors ${dragging ? "bg-[#2563EB]" : "bg-blue-50"}`}>
             <Upload size={28} className={dragging ? "text-white" : "text-[#2563EB]"}/>
           </div>
@@ -827,7 +1062,7 @@ function UploadTab({ role }: { role: Role }) {
           <p className="text-xs text-slate-400 mb-5">PDF, DOCX, XLSX, PPTX, PNG · up to 100 MB per file</p>
           <div className="flex items-center justify-center gap-3" onClick={e => e.stopPropagation()}>
             <Btn icon={<FileIcon size={13}/>} onClick={() => inputRef.current?.click()}>Select File</Btn>
-            <Btn variant="outline" icon={<FolderOpen size={13}/>} onClick={() => enqueue(["Folder — Document A.pdf", "Folder — Document B.docx", "Folder — Spreadsheet.xlsx"])}>
+            <Btn variant="outline" icon={<FolderOpen size={13}/>} onClick={() => folderInputRef.current?.click()}>
               Select Folder
             </Btn>
           </div>
@@ -853,15 +1088,21 @@ function UploadTab({ role }: { role: Role }) {
                     </div>
                     {f.status === "uploading" && (
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#2563EB] rounded-full transition-all duration-300" style={{ width:`${f.progress}%` }}/>
+                        <div className="h-full bg-[#2563EB] rounded-full transition-all duration-300 animate-pulse" style={{ width: "60%" }}/>
                       </div>
                     )}
                     {f.status === "done" && <p className="text-[10px] text-emerald-600 font-medium">Upload complete</p>}
-                    {f.status === "error" && <p className="text-[10px] text-red-500">Failed — click to retry</p>}
+                    {f.status === "error" && <p className="text-[10px] text-red-500">Upload failed</p>}
                     {f.status === "queued" && <p className="text-[10px] text-slate-400">Waiting…</p>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {f.status === "uploading" && <span className="text-xs text-[#2563EB] font-semibold font-mono w-8 text-right">{f.progress}%</span>}
+                    {f.status === "uploading" && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-1 h-1 bg-[#2563EB] rounded-full animate-bounce" style={{ animationDelay:"0ms" }}/>
+                        <div className="w-1 h-1 bg-[#2563EB] rounded-full animate-bounce" style={{ animationDelay:"150ms" }}/>
+                        <div className="w-1 h-1 bg-[#2563EB] rounded-full animate-bounce" style={{ animationDelay:"300ms" }}/>
+                      </div>
+                    )}
                     {f.status === "done" && <CheckCircle size={15} className="text-emerald-500"/>}
                     {f.status === "error" && <AlertCircle size={15} className="text-red-500"/>}
                     {f.status === "queued" && <Clock size={15} className="text-slate-400"/>}
@@ -876,69 +1117,67 @@ function UploadTab({ role }: { role: Role }) {
         )}
       </div>
 
-      {/* Right col */}
+      {/* Right col — Upload tips */}
       <div className="space-y-4">
-        {/* Storage (manager/admin) */}
-        {role !== "user" && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                <HardDrive size={16} className="text-[#2563EB]"/>
-              </div>
-              <h3 className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>Storage Usage</h3>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Info size={16} className="text-[#2563EB]"/>
             </div>
-            <div className="relative w-24 h-24 mx-auto mb-4">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="16" fill="none" stroke="#f1f5f9" strokeWidth="3"/>
-                <circle cx="18" cy="18" r="16" fill="none" stroke={storagePct > 85 ? "#ef4444" : storagePct > 65 ? "#f59e0b" : "#2563EB"}
-                  strokeWidth="3" strokeDasharray={`${storagePct} 100`} strokeLinecap="round"/>
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-lg font-bold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>{Math.round(storagePct)}%</span>
-                <span className="text-[9px] text-slate-400">used</span>
-              </div>
-            </div>
-            <div className="text-center mb-3">
-              <p className="text-xs text-slate-500"><span className="font-semibold text-slate-800">{storageUsed} GB</span> of {storageQuota} GB</p>
-            </div>
-            <div className="text-xs text-slate-400 text-center">{(storageQuota - storageUsed).toFixed(1)} GB remaining</div>
+            <h3 className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>Upload Tips</h3>
           </div>
-        )}
-
-        {/* History */}
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>Recent Uploads</h3>
-            <button className="text-xs text-[#2563EB] font-medium">View all</button>
-          </div>
-          <div className="p-3 space-y-1">
-            {history.map(f => (
-              <div key={f.id} className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 rounded-xl transition-colors">
-                <FileChip type={f.type} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-slate-700 truncate">{f.name}</p>
-                  <p className="text-[10px] text-slate-400 font-mono">{fmtSize(f.rawSize)}</p>
-                </div>
-                <div className="flex-shrink-0">
-                  {f.status === "done" && <CheckCircle size={14} className="text-emerald-500"/>}
-                  {f.status === "uploading" && (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1 h-1 bg-[#2563EB] rounded-full animate-bounce" style={{ animationDelay:"0ms" }}/>
-                      <div className="w-1 h-1 bg-[#2563EB] rounded-full animate-bounce" style={{ animationDelay:"150ms" }}/>
-                      <div className="w-1 h-1 bg-[#2563EB] rounded-full animate-bounce" style={{ animationDelay:"300ms" }}/>
-                    </div>
-                  )}
-                  {f.status === "error" && <AlertCircle size={14} className="text-red-500"/>}
-                </div>
-              </div>
-            ))}
+          <div className="space-y-3 text-xs text-slate-500">
+            <div className="flex items-start gap-2">
+              <CheckCircle size={12} className="text-emerald-500 mt-0.5 flex-shrink-0"/>
+              <span>Use <strong>Select File</strong> for individual documents</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle size={12} className="text-emerald-500 mt-0.5 flex-shrink-0"/>
+              <span>Use <strong>Select Folder</strong> to upload an entire directory</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle size={12} className="text-emerald-500 mt-0.5 flex-shrink-0"/>
+              <span>Drag & drop files directly onto the upload area</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle size={12} className="text-emerald-500 mt-0.5 flex-shrink-0"/>
+              <span>Supported formats: PDF, DOCX, XLSX, PPTX, PNG</span>
+            </div>
           </div>
         </div>
+
+        {/* Upload summary */}
+        {queue.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-800 mb-3" style={{ fontFamily:"var(--font-display)" }}>Summary</h3>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Total files</span>
+                <span className="font-semibold text-slate-700 font-mono">{queue.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Completed</span>
+                <span className="font-semibold text-emerald-600 font-mono">{queue.filter(q => q.status === "done").length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">In progress</span>
+                <span className="font-semibold text-[#2563EB] font-mono">{queue.filter(q => q.status === "uploading").length}</span>
+              </div>
+              {queue.some(q => q.status === "error") && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Failed</span>
+                  <span className="font-semibold text-red-500 font-mono">{queue.filter(q => q.status === "error").length}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {toast && <ToastBar msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
-
 // ─── Admin — Analytics Panel ───────────────────────────────────────────────────
 
 function AnalyticsPanel() {
@@ -1481,28 +1720,31 @@ function UsersPanel() {
 
 // ─── Role Dashboards ──────────────────────────────────────────────────────────
 
-function UserDashboard({ user }: { user: UserRecord }) {
-  const [tab, setTab] = useState<"documents"|"upload">("documents");
+function UserDashboard({ user, activeNav }: { user: UserRecord, activeNav: string }) {
+  const [totals, setTotals] = useState({ personal: 0, shared: 0, unit_inherited: 0 });
 
-  const myDocs = DOCS.filter(d => d.ownerId === user.id).length;
-  const sharedDocs = DOCS.filter(d => d.section === "shared").length;
-  const bookmarked = DOCS.filter(d => d.bookmarked).length;
+  useEffect(() => {
+    fetchDocumentsApi(1, 1).then(res => setTotals(res.totals)).catch(() => {});
+  }, []);
+
+  if (activeNav === "documents") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><DocumentsTab role={user.role}/></div>;
+  if (activeNav === "upload") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><UploadTab role={user.role}/></div>;
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <Header
-        title={tab === "documents" ? "Document Library" : "Upload Documents"}
-        subtitle={tab === "documents" ? `Welcome back, ${user.name.split(" ")[0]}` : "Add files to your library"}
+        title="Document Library"
+        subtitle={`Welcome back, ${user.name.split(" ")[0]}`}
       />
       <main className="flex-1 overflow-y-auto bg-slate-50">
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
           {/* Mini KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label:"My Documents", value:myDocs, icon:<FileText size={15}/>, color:"blue" as const },
-              { label:"Shared With Me", value:sharedDocs, icon:<Inbox size={15}/>, color:"green" as const },
-              { label:"Inherited", value:3, icon:<Archive size={15}/>, color:"purple" as const },
-              { label:"Bookmarked", value:bookmarked, icon:<Star size={15}/>, color:"orange" as const },
+              { label:"My Documents", value:totals.personal, icon:<FileText size={15}/>, color:"blue" as const },
+              { label:"Shared With Me", value:totals.shared, icon:<Inbox size={15}/>, color:"green" as const },
+              { label:"Inherited", value:totals.unit_inherited, icon:<Archive size={15}/>, color:"purple" as const },
+              { label:"Bookmarked", value:0, icon:<Star size={15}/>, color:"orange" as const },
             ].map(k => (
               <div key={k.label} className={`bg-white rounded-xl border border-slate-200 px-4 py-3.5 flex items-center gap-3 shadow-sm`}>
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -1518,28 +1760,16 @@ function UserDashboard({ user }: { user: UserRecord }) {
               </div>
             ))}
           </div>
-
-          {/* Tab bar */}
-          <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 w-fit shadow-sm">
-            {([["documents","Documents"],["upload","Upload"]] as const).map(([t,l]) => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-5 py-2 text-sm font-medium rounded-lg transition-all ${tab === t ? "bg-[#2563EB] text-white shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}
-                style={{ fontFamily:"var(--font-sans)" }}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {tab === "documents" ? <DocumentsTab role={user.role}/> : <UploadTab role={user.role}/>}
         </div>
       </main>
     </div>
   );
 }
 
-function ManagerDashboard({ user }: { user: UserRecord }) {
-  const [tab, setTab] = useState<"documents"|"upload">("documents");
+function ManagerDashboard({ user, activeNav }: { user: UserRecord, activeNav: string }) {
+  if (activeNav === "documents") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><DocumentsTab role={user.role}/></div>;
+  if (activeNav === "upload") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><UploadTab role={user.role}/></div>;
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <Header title="Document Management" subtitle="Sales · Unit Manager" />
@@ -1564,39 +1794,23 @@ function ManagerDashboard({ user }: { user: UserRecord }) {
               </div>
             ))}
           </div>
-          <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 w-fit shadow-sm">
-            {([["documents","Documents"],["upload","Upload"]] as const).map(([t,l]) => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-5 py-2 text-sm font-medium rounded-lg transition-all ${tab === t ? "bg-[#2563EB] text-white shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}
-              >{l}</button>
-            ))}
-          </div>
-          {tab === "documents" ? <DocumentsTab role={user.role}/> : <UploadTab role={user.role}/>}
         </div>
       </main>
     </div>
   );
 }
 
-function AdminDashboard({ user }: { user: UserRecord }) {
-  const [tab, setTab] = useState<"analytics"|"units"|"users">("analytics");
-  const tabMeta = { analytics:"Analytics Overview", units:"Unit Management", users:"User Management" };
+function AdminDashboard({ user, activeNav }: { user: UserRecord, activeNav: string }) {
+  const tabMeta: Record<string, string> = { analytics:"Analytics Overview", units:"Unit Management", users:"User Management" };
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      <Header title={tabMeta[tab]} subtitle="System Administration" />
+      <Header title={tabMeta[activeNav] || "Dashboard"} subtitle="System Administration" />
       <main className="flex-1 overflow-y-auto bg-slate-50">
         <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
-          <div className="flex gap-1 bg-white rounded-xl border border-slate-200 p-1 w-fit shadow-sm">
-            {([["analytics","Analytics"],["units","Units"],["users","Users"]] as const).map(([t,l]) => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-5 py-2 text-sm font-medium rounded-lg transition-all ${tab === t ? "bg-[#2563EB] text-white shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"}`}
-              >{l}</button>
-            ))}
-          </div>
-          {tab === "analytics" && <AnalyticsPanel/>}
-          {tab === "units" && <UnitsPanel/>}
-          {tab === "users" && <UsersPanel/>}
+          {activeNav === "analytics" && <AnalyticsPanel/>}
+          {activeNav === "units" && <UnitsPanel/>}
+          {activeNav === "users" && <UsersPanel/>}
         </div>
       </main>
     </div>
@@ -1605,7 +1819,7 @@ function AdminDashboard({ user }: { user: UserRecord }) {
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
 
-function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
+function LoginPage({ onLogin }: { onLogin: (token: string, role: Role, username: string, userId: string) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -1621,14 +1835,20 @@ function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
   const strengthLabel = ["Weak", "Fair", "Strong"][strength.filter(Boolean).length - 1] ?? "";
   const strengthColor = ["bg-red-400", "bg-amber-400", "bg-emerald-500"][strength.filter(Boolean).length - 1] ?? "bg-slate-200";
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!username.trim() || !password) { setError("Please enter your username and password."); return; }
     setError(""); setLoading(true);
-    setTimeout(() => {
-      const cred = CREDENTIALS[username.toLowerCase()];
-      if (cred && cred.pass === password) { onLogin(cred.role); }
-      else { setError("Incorrect username or password. Please try again."); setLoading(false); }
-    }, 900);
+    try {
+      const data = await loginApi(username.trim(), password);
+      const payload = decodeJwtPayload(data.access_token);
+      if (!payload) { setError("Invalid token received from server."); setLoading(false); return; }
+      const role = ROLE_MAP[payload.role?.toUpperCase()];
+      if (!role) { setError("Unknown user role. Please contact your administrator."); setLoading(false); return; }
+      onLogin(data.access_token, role, payload.username, payload.sub);
+    } catch (err: any) {
+      setError(err.message || "Login failed. Please try again.");
+      setLoading(false);
+    }
   };
 
   return (
@@ -1720,29 +1940,7 @@ function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
                 </button>
               </div>
 
-              {/* Demo accounts */}
-              <div className="mt-6 pt-5 border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Demo Accounts</p>
-                <div className="space-y-1.5">
-                  {[
-                    { role:"user" as Role, user:"alex.chen", pass:"user123", name:"Alex Chen" },
-                    { role:"manager" as Role, user:"maria.santos", pass:"mgr123", name:"Maria Santos" },
-                    { role:"admin" as Role, user:"nina.patel", pass:"admin123", name:"Nina Patel" },
-                  ].map(d => (
-                    <button key={d.role} onClick={() => { setUsername(d.user); setPassword(d.pass); setError(""); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/40 transition-all group text-left"
-                    >
-                      <Avatar initials={d.name.split(" ").map(n=>n[0]).join("")} size="xs"/>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-slate-700">{d.name}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">{d.user}</p>
-                      </div>
-                      <RolePill role={d.role}/>
-                      <ChevronRight size={12} className="text-slate-300 group-hover:text-[#2563EB] transition-colors"/>
-                    </button>
-                  ))}
-                </div>
-              </div>
+
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-8">
@@ -1808,28 +2006,36 @@ function LoginPage({ onLogin }: { onLogin: (role: Role) => void }) {
 
 // ─── App Root ─────────────────────────────────────────────────────────────────
 
-const ROLE_USER: Record<Role, UserRecord> = {
-  user:    USERS[0],
-  manager: USERS[1],
-  admin:   USERS[5],
-};
-
 export default function App() {
-  const [view, setView] = useState<"login"|"app">("login");
-  const [role, setRole] = useState<Role>("user");
+  const stored = getStoredAuth();
+  const [view, setView] = useState<"login"|"app">(stored ? "app" : "login");
+  const [role, setRole] = useState<Role>(stored?.role ?? "user");
+  const [user, setUser] = useState<UserRecord>(
+    stored ? buildUserFromAuth({ username: stored.username, role: stored.role, userId: stored.userId }) : USERS[0]
+  );
   const [activeNav, setActiveNav] = useState("home");
 
-  const user = ROLE_USER[role];
+  const handleLogin = (token: string, r: Role, username: string, userId: string) => {
+    localStorage.setItem("access_token", token);
+    const userRecord = buildUserFromAuth({ username, role: r, userId });
+    setRole(r);
+    setUser(userRecord);
+    setView("app");
+    setActiveNav("home");
+  };
 
-  const handleLogin = (r: Role) => { setRole(r); setView("app"); setActiveNav("home"); };
-  const handleLogout = () => { setView("login"); setRole("user"); };
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    setView("login");
+    setRole("user");
+  };
 
   if (view === "login") return <LoginPage onLogin={handleLogin}/>;
 
   const renderMain = () => {
-    if (role === "admin")   return <AdminDashboard user={user}/>;
-    if (role === "manager") return <ManagerDashboard user={user}/>;
-    return <UserDashboard user={user}/>;
+    if (role === "admin")   return <AdminDashboard user={user} activeNav={activeNav}/>;
+    if (role === "manager") return <ManagerDashboard user={user} activeNav={activeNav}/>;
+    return <UserDashboard user={user} activeNav={activeNav}/>;
   };
 
   return (
