@@ -5,13 +5,13 @@ from fastapi import HTTPException, status
 from repositories.document_repository import DocumentRepository
 from models.user_model import User
 
-from sqlalchemy.orm import Session, func
-
+from sqlalchemy.orm import Session
 from models.unit_model import Unit
 from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitDocumentStat, UnitUpdate, UnitLookupResponse, UnitDetailResponse, UnitDetailMember, AnalyticsOverviewResponse
 from core.exceptions import DocumentNotFoundException
 from repositories.unit_repository import UnitRepository
 from models.document_model import Document
+from sqlalchemy import func
 from uuid import UUID
 
 class UnitService:
