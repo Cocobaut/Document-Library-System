@@ -17,6 +17,7 @@ from services.document_service import DocumentService
 
 router = APIRouter(prefix="/api/documents", tags=["Tài liệu"])
 
+
 @router.get("/", response_model=DocumentListResponse, summary="Trang chính - Danh sách tài liệu")
 async def get_documents(
     page: int = Query(default=1, ge=1),

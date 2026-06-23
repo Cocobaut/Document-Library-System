@@ -9,9 +9,11 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.security import create_access_token
 from core.config import get_settings
+from core.deps import get_current_user
+
 from schemas.auth_schema import LoginPayload, TokenResponse, ChangePasswordPayload
 from services.user_service import UserService
-from core.deps import get_current_user
+
 from models.user_model import User
 
 settings = get_settings()
@@ -52,7 +54,7 @@ async def login(payload: LoginPayload, db: Session = Depends(get_db)):
 async def change_password(
     payload: ChangePasswordPayload,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)  # Ép buộc phải gắn Token
+    current_user: User = Depends(get_current_user)
 ):
     """
     API đổi mật khẩu dùng chung cho mọi vai trò (Admin, Manager, User).
