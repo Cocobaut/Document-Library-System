@@ -7,9 +7,11 @@
  * - User profile block with logout button
  */
 import React from "react";
-import { Home, FileText, Upload, LayoutDashboard, Building2, Users, BarChart2, Layers, LogOut } from "lucide-react";
+import { Home, FileText, Upload, LayoutDashboard, Building2, Users, BarChart2, Layers, LogOut, Key } from "lucide-react";
 import { Role, UserRecord } from "../types";
 import { Avatar } from "../utils";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
+import { useState } from "react";
 
 /**
  * Navigation item configuration for each user role.
@@ -45,6 +47,7 @@ export const NAV_ITEMS: Record<Role, Array<{ id:string; label:string; icon:React
 export function Sidebar({ role, active, setActive, onLogout, user }: {
     role: Role; active: string; setActive: (s: string) => void; onLogout: () => void; user: UserRecord;
 }) {
+    const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const items = NAV_ITEMS[role];
     // Track the last rendered section header to avoid duplicate section labels
     let lastSection = "";
@@ -97,11 +100,20 @@ export function Sidebar({ role, active, setActive, onLogout, user }: {
                         <p className="text-xs font-semibold text-slate-700 truncate" style={{ fontFamily:"var(--font-display)" }}>{user.name}</p>
                         <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
                     </div>
+                    <button onClick={() => setIsChangePasswordOpen(true)} title="Change Password" className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-200 hover:text-slate-700 text-slate-400 transition-colors">
+                        <Key size={13} />
+                    </button>
                     <button onClick={onLogout} title="Sign out" className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors">
                         <LogOut size={13} />
                     </button>
                 </div>
             </div>
+            
+            <ChangePasswordDialog 
+                isOpen={isChangePasswordOpen} 
+                onClose={() => setIsChangePasswordOpen(false)} 
+                token={localStorage.getItem("access_token") || ""}
+            />
         </aside>
     );
 }

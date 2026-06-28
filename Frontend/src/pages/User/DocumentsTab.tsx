@@ -5,55 +5,88 @@
  * Responsible for:
  * - Loading documents from the API with bookmark status merging
  * - Searching documents by name and owner
- * - Filtering by file type and sorting by name/date
+ * - Filtering by file type, sorting by name/date, and filtering by Task (Label)
  * - Displaying documents grouped into sections (My Documents, Shared, Inherited)
- * - Bookmark toggling, visibility toggling, document sharing, and deletion
+ * - Bookmark toggling, visibility toggling, document sharing, task assignment, and deletion
+ * - Infinite scrolling for each document section independently
  */
-import React, { useState, useEffect } from "react";
-import { Search, RefreshCw, SlidersHorizontal, FolderOpen, Users, Building2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
-import { Role, Doc, DocSection, Modal } from "../../types";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Search, RefreshCw, SlidersHorizontal, FolderOpen, Users, AlertCircle, Tag } from "lucide-react";
+import { Role, Doc, DocSection, Modal, Task } from "../../types";
 import { fetchDocumentsApi, fetchBookmarksApi, removeBookmarkApi, markBookmarkApi, shareDocumentApi, apiDocToDoc, fetchAllUnitsApi } from "../../services/documentApi";
+import { fetchTasksApi } from "../../services/taskApi";
 import { TextInput, SelectInput, Btn, Field } from "../../components/DesignSystem";
 import { ModalShell, Confirm, ToastBar } from "../../components/Modal";
 import { DocRow } from "../../components/DocumentRow";
+import { TaskDialog } from "../../components/TaskDialog";
 
-/*
- * Document listing component with search, filter, sort, and CRUD actions.
- *
- * @param role - Current user's role, controls which actions are available
- */
+const PAGE_SIZE = 15;
+
+function ScrollTrigger({ onTrigger, loading, hasMore }: { onTrigger: () => void, loading: boolean, hasMore: boolean }) {
+    const observer = useRef<IntersectionObserver | null>(null);
+    const triggerRef = useCallback((node: HTMLDivElement) => {
+        if (loading) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMore) {
+                onTrigger();
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [loading, hasMore, onTrigger]);
+
+    if (!hasMore) {
+        return <div className="text-center py-4 text-xs text-slate-400">No more documents.</div>;
+    }
+
+    return (
+        <div ref={triggerRef} className="py-4 flex justify-center">
+            {loading && <div className="w-5 h-5 border-2 border-slate-200 border-t-[#2563EB] rounded-full animate-spin" />}
+        </div>
+    );
+}
+
 export function DocumentsTab({ role }: { role: Role }) {
     const [docs, setDocs] = useState<Doc[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
     const [totals, setTotals] = useState({ personal: 0, shared: 0, unit_inherited: 0 });
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState("");
+    
+    // Filters
     const [search, setSearch] = useState("");
     const [filterType, setFilterType] = useState("all");
     const [sort, setSort] = useState("date-desc");
+    const [filterTask, setFilterTask] = useState("all");
+
     const [modal, setModal] = useState<Modal>(null);
     const [toast, setToast] = useState<{ msg:string; type:"success"|"error"|"info" }|null>(null);
+    
     const [shareForm, setShareForm] = useState({ username: "", unitId: "" });
     const [shareLoading, setShareLoading] = useState(false);
+    
     const [units, setUnits] = useState<{unit_id: string, name: string}[]>([]);
 
-    /*
-     * Loads all documents and bookmarks in parallel, then merges bookmark status
-     * into the document list. Documents from all three API sections (personal,
-     * shared, unit_inherited) are combined into a single flat array.
-     */
+    // Pagination states
+    const [pages, setPages] = useState({ mine: 1, shared: 1, inherited: 1 });
+    const [hasMore, setHasMore] = useState({ mine: true, shared: true, inherited: true });
+    const [loadingMore, setLoadingMore] = useState({ mine: false, shared: false, inherited: false });
+    // Keep bookmarks cached to avoid fetching on every pagination
+    const [bookmarksCache, setBookmarksCache] = useState<string[]>([]);
+
     const loadDocs = async () => {
         setLoading(true);
         setFetchError("");
         try {
-            // Fetch documents and bookmarks concurrently to merge bookmark state
-            const [data, bookmarks] = await Promise.all([
-                fetchDocumentsApi(1, 100),
-                fetchBookmarksApi()
+            const [data, bookmarks, tasksData] = await Promise.all([
+                fetchDocumentsApi(1, PAGE_SIZE),
+                fetchBookmarksApi(),
+                fetchTasksApi()
             ]);
 
+            setBookmarksCache(bookmarks);
             const isBookmarked = (id: string) => bookmarks.includes(id);
 
-            // Flatten all three document sections into a single array with section tags
             const allDocs: Doc[] = [
                 ...data.items.personal.map(d => ({ ...apiDocToDoc(d, "mine"), bookmarked: isBookmarked(d.document_id) })),
                 ...data.items.shared.map(d => ({ ...apiDocToDoc(d, "shared"), bookmarked: isBookmarked(d.document_id) })),
@@ -61,6 +94,14 @@ export function DocumentsTab({ role }: { role: Role }) {
             ];
             setDocs(allDocs);
             setTotals(data.totals);
+            setTasks(tasksData);
+            
+            setPages({ mine: 1, shared: 1, inherited: 1 });
+            setHasMore({
+                mine: data.items.personal.length === PAGE_SIZE,
+                shared: data.items.shared.length === PAGE_SIZE,
+                inherited: data.items.unit_inherited.length === PAGE_SIZE,
+            });
         } 
         catch (err: any) {
             setFetchError(err.message || "Failed to load documents");
@@ -70,56 +111,82 @@ export function DocumentsTab({ role }: { role: Role }) {
         }
     };
 
+    const loadMore = async (section: DocSection) => {
+        if (loadingMore[section] || !hasMore[section]) return;
+        
+        setLoadingMore(p => ({ ...p, [section]: true }));
+        try {
+            const nextPage = pages[section] + 1;
+            const data = await fetchDocumentsApi(nextPage, PAGE_SIZE);
+            const isBookmarked = (id: string) => bookmarksCache.includes(id);
+
+            let newDocs: Doc[] = [];
+            if (section === "mine") {
+                newDocs = data.items.personal.map(d => ({ ...apiDocToDoc(d, "mine"), bookmarked: isBookmarked(d.document_id) }));
+            } else if (section === "shared") {
+                newDocs = data.items.shared.map(d => ({ ...apiDocToDoc(d, "shared"), bookmarked: isBookmarked(d.document_id) }));
+            } else if (section === "inherited") {
+                newDocs = data.items.unit_inherited.map(d => ({ ...apiDocToDoc(d, "inherited"), bookmarked: isBookmarked(d.document_id) }));
+            }
+
+            setDocs(p => {
+                const existingIds = new Set(p.map(d => d.id));
+                const uniqueNew = newDocs.filter(d => !existingIds.has(d.id));
+                return [...p, ...uniqueNew];
+            });
+
+            setPages(p => ({ ...p, [section]: nextPage }));
+            setHasMore(p => ({ ...p, [section]: newDocs.length === PAGE_SIZE }));
+            
+        } catch (err: any) {
+            showToast(err.message || `Failed to load more documents`, "error");
+        } finally {
+            setLoadingMore(p => ({ ...p, [section]: false }));
+        }
+    };
+
     useEffect(() => {
         loadDocs();
-        // Load available units for the share dialog's department dropdown
         fetchAllUnitsApi().then(setUnits).catch(() => {});
     }, []);
 
-    /*
-     * Applies search, type filter, and sort order to the document list.
-     * Search matches against document name and owner (case-insensitive).
-     */
+    // Unique tasks for filter dropdown
+    const uniqueTaskNames = Array.from(new Map(tasks.map(t => [t.taskName, t])).values());
+
     const filtered = docs
         .filter(d => {
             const q = search.toLowerCase();
+            const docTask = tasks.find(t => t.documentId === d.id);
             return (d.name.toLowerCase().includes(q) || d.owner.toLowerCase().includes(q))
-                && (filterType === "all" || d.type === filterType);
+                && (filterType === "all" || d.type === filterType)
+                && (filterTask === "all" || docTask?.taskName === filterTask);
         })
         .sort((a, b) => {
-            // Sort by name or upload date in ascending or descending order
             if (sort === "name-asc") return a.name.localeCompare(b.name);
             if (sort === "name-desc") return b.name.localeCompare(a.name);
             if (sort === "date-asc") return a.uploadDate.localeCompare(b.uploadDate);
             return b.uploadDate.localeCompare(a.uploadDate);
         });
 
-    /** Section configuration defining the three document groupings displayed in order. */
     const sections: { key: DocSection; label: string; desc: string }[] = [
         { key:"mine",      label:"My Uploaded Documents",   desc:"Files you have uploaded" },
         { key:"shared",    label:"Shared With Me",           desc:"Documents others shared with you" },
         { key:"inherited", label:"Inherited Documents",      desc:"Organization-wide documents" },
     ];
 
-    /**
-     * Toggles the bookmark status of a document via the API.
-     * Optimistically updates the local state on success.
-     *
-     * @param id - Document ID to bookmark or un-bookmark
-     */
     const onBookmark = async (id: string) => {
         const doc = docs.find(d => d.id === id);
-
         if (!doc) return;
-        
         try {
-            if (doc.bookmarked) {
-                await removeBookmarkApi(id);
-            } 
-            else {
-                await markBookmarkApi(id);
-            }
+            if (doc.bookmarked) await removeBookmarkApi(id);
+            else await markBookmarkApi(id);
+            
             setDocs(p => p.map(d => d.id === id ? { ...d, bookmarked: !doc.bookmarked } : d));
+            
+            setBookmarksCache(p => {
+                if (doc.bookmarked) return p.filter(bid => bid !== id);
+                return [...p, id];
+            });
             showToast(doc.bookmarked ? "Bookmark removed" : "Bookmark added", "success");
         } 
         catch (err: any) {
@@ -127,49 +194,26 @@ export function DocumentsTab({ role }: { role: Role }) {
         }
     };
 
-    /*
-     * Toggles the public/private visibility of a document (local state only).
-     *
-     * @param id - Document ID to toggle
-     */
     const onTogglePublic = (id: string) => {
         setDocs(p => p.map(d => d.id === id ? { ...d, isPublic: !d.isPublic } : d));
         showToast("Visibility updated", "info");
     };
 
-    /*
-     * Removes a document from the local list after deletion confirmation.
-     *
-     * @param id - Document ID to remove
-     */
     const confirmDelete = (id: string) => {
         setDocs(p => p.filter(d => d.id !== id));
         setModal(null);
         showToast("Document deleted", "success");
     };
 
-    /*
-     * Displays a toast notification message.
-     *
-     * @param msg - Message text
-     * @param type - Visual style variant
-     */
     const showToast = (msg: string, type: "success"|"error"|"info" = "success") => setToast({ msg, type });
 
-    /*
-     * Shares a document with another user in a specified department via the API.
-     * Validates that both username and unit are provided before submitting.
-     */
     const handleShare = async () => {
         if (!modal || modal.type !== "share") return;
-        
         if (!shareForm.username.trim() || !shareForm.unitId.trim()) {
             showToast("Please fill in all fields", "error");
             return;
         }
-        
         setShareLoading(true);
-        
         try {
             await shareDocumentApi(modal.doc.id, shareForm.username.trim(), shareForm.unitId.trim(), "view");
             showToast("Document shared successfully");
@@ -207,7 +251,6 @@ export function DocumentsTab({ role }: { role: Role }) {
 
     return (
         <div className="space-y-5">
-            {/* Toolbar */}
             <div className="flex flex-wrap items-center gap-2.5">
                 <div className="flex-1 min-w-[200px] max-w-sm">
                     <TextInput value={search} onChange={v => setSearch(v)} placeholder="Search documents…" icon={<Search size={14}/>} />
@@ -222,9 +265,16 @@ export function DocumentsTab({ role }: { role: Role }) {
                 <SelectInput value={sort} onChange={setSort}>
                     <option value="date-desc">Newest First</option>
                     <option value="date-asc">Oldest First</option>
-                    <option value="name-asc">Name A–Z</option>
-                    <option value="name-desc">Name Z–A</option>
+                    <option value="name-asc">Name A-Z</option>
+                    <option value="name-desc">Name Z-A</option>
                 </SelectInput>
+                <SelectInput value={filterTask} onChange={setFilterTask}>
+                    <option value="all">All Tasks</option>
+                    {uniqueTaskNames.map(t => (
+                        <option key={t.taskId} value={t.taskName}>{t.taskName}</option>
+                    ))}
+                </SelectInput>
+
                 {role !== "user" && (
                     <Btn variant="outline" size="md" icon={<SlidersHorizontal size={13}/>}>Bulk Actions</Btn>
                 )}
@@ -232,7 +282,6 @@ export function DocumentsTab({ role }: { role: Role }) {
                 <span className="text-xs text-slate-400 ml-auto">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
             </div>
 
-            {/* Document sections — each section shows documents filtered by ownership type */}
             {sections.map(sec => {
                 const secDocs = filtered.filter(d => d.section === sec.key);
                 const totalInSec = docs.filter(d => d.section === sec.key).length;
@@ -249,28 +298,36 @@ export function DocumentsTab({ role }: { role: Role }) {
                             <div className="flex flex-col items-center justify-center py-10 text-slate-300">
                                 <FolderOpen size={36} strokeWidth={1.5} className="mb-2"/>
                                 <p className="text-sm text-slate-400">
-                                    {search || filterType !== "all" ? "No matching documents" : "No documents in this section"}
+                                    {search || filterType !== "all" || filterTask !== "all" ? "No matching documents" : "No documents in this section"}
                                 </p>
                             </div>
                         ) : (
-                            <div className="p-2">
-                                {secDocs.map(doc => (
-                                    <DocRow
-                                        key={doc.id} doc={doc} role={role}
-                                        onBookmark={onBookmark}
-                                        onShare={doc => { setShareForm({ username: "", unitId: "" }); setModal({ type:"share", doc }); }}
-                                        onDelete={id => setModal({ type:"delete-doc", id })}
-                                        onTogglePublic={onTogglePublic}
-                                    />
-                                ))}
+                            <div className="p-2 max-h-[400px] overflow-y-auto">
+                                {secDocs.map(doc => {
+                                    const unitName = units.find(u => u.unit_id === doc.unitId)?.name;
+                                    const docTask = tasks.find(t => t.documentId === doc.id);
+                                    return (
+                                        <DocRow
+                                            key={doc.id} doc={doc} role={role} unitName={unitName} task={docTask}
+                                            onBookmark={onBookmark}
+                                            onShare={doc => { setShareForm({ username: "", unitId: "" }); setModal({ type:"share", doc }); }}
+                                            onTask={doc => setModal({ type: "task", doc })}
+                                            onDelete={id => setModal({ type:"delete-doc", id })}
+                                            onTogglePublic={onTogglePublic}
+                                        />
+                                    );
+                                })}
+                                <ScrollTrigger 
+                                    loading={loadingMore[sec.key]} 
+                                    hasMore={hasMore[sec.key]} 
+                                    onTrigger={() => loadMore(sec.key)} 
+                                />
                             </div>
                         )}
                     </div>
                 );
             })}
 
-
-            {/* Share Modal */}
             {modal?.type === "share" && (
                 <ModalShell title="Share Document" subtitle={modal.doc.name} onClose={() => setModal(null)}>
                     <div className="space-y-5">
@@ -295,6 +352,27 @@ export function DocumentsTab({ role }: { role: Role }) {
                         </div>
                     </div>
                 </ModalShell>
+            )}
+
+            {modal?.type === "task" && (
+                <TaskDialog
+                    doc={modal.doc}
+                    existingTask={tasks.find(t => t.documentId === modal.doc.id)}
+                    onClose={() => setModal(null)}
+                    onSuccess={(newTask) => {
+                        setTasks(prev => {
+                            const index = prev.findIndex(t => t.taskId === newTask.taskId);
+                            if (index >= 0) {
+                                const newTasks = [...prev];
+                                newTasks[index] = newTask;
+                                return newTasks;
+                            }
+                            return [...prev, newTask];
+                        });
+                        showToast(`Task '${newTask.taskName}' saved successfully`);
+                    }}
+                    onError={(msg) => showToast(msg, "error")}
+                />
             )}
 
             {modal?.type === "delete-doc" && (

@@ -61,6 +61,30 @@ export async function loginApi(username: string, password: string): Promise<{ ac
 }
 
 /**
+ * Changes the user's password.
+ * 
+ * @param old_password - The current password
+ * @param new_password - The new password
+ * @param token - The user's JWT access token
+ * @returns Promise containing a success message
+ */
+export async function changePasswordApi(old_password: string, new_password: string, token: string): Promise<{ message: string }> {
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+        method: "PUT",
+        headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ old_password, new_password }),
+    });
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? "Đổi mật khẩu thất bại. Vui lòng thử lại.");
+    }
+    return res.json();
+}
+
+/**
  * Restores authentication state from localStorage on application load.
  * Validates the stored JWT token, checks expiration, and extracts user info.
  *

@@ -524,5 +524,6 @@ export function apiDocToDoc(d: ApiDoc, section: DocSection): Doc {
         // Support both "bookmarked" and "is_bookmarked" fields from different API versions
         bookmarked: d.bookmarked ?? d.is_bookmarked ?? false,
         status: "active",
+        unitId: d.unit_id,
     };
 }

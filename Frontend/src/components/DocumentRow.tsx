@@ -7,8 +7,8 @@
  * Action visibility is controlled by the current user's role.
  */
 import React from "react";
-import { Share2, Globe, Lock, Star, Download, Trash2 } from "lucide-react";
-import { Doc, Role } from "../types";
+import { Share2, Globe, Lock, Star, Download, Trash2, Tag } from "lucide-react";
+import { Doc, Role, Task } from "../types";
 import { FileChip, StatusPill } from "../utils";
 
 /**
@@ -19,15 +19,17 @@ import { FileChip, StatusPill } from "../utils";
  * @param role - Current user's role (controls delete and visibility toggle access)
  * @param onBookmark - Callback when bookmark button is clicked
  * @param onShare - Callback when share button is clicked
+ * @param onTask - Callback when task button is clicked
  * @param onDelete - Callback when delete button is clicked
  * @param onTogglePublic - Callback when public/private toggle is clicked
  */
 export function DocRow({
-    doc, role, onBookmark, onShare, onDelete, onTogglePublic,
+    doc, role, unitName, task, onBookmark, onShare, onTask, onDelete, onTogglePublic,
 }: {
-    doc: Doc; role: Role;
+    doc: Doc; role: Role; unitName?: string; task?: Task;
     onBookmark: (id: string) => void;
     onShare: (doc: Doc) => void;
+    onTask: (doc: Doc) => void;
     onDelete: (id: string) => void;
     onTogglePublic: (id: string) => void;
 }) {
@@ -39,10 +41,26 @@ export function DocRow({
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-50/80 transition-all group border border-transparent hover:border-slate-100">
             <FileChip type={doc.type} />
             <div className="flex-1 min-w-0 mr-2">
-                <p className="text-sm font-medium text-slate-800 truncate group-hover:text-[#2563EB] transition-colors">{doc.name}</p>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                    <p className="text-sm font-medium text-slate-800 truncate group-hover:text-[#2563EB] transition-colors">{doc.name}</p>
+                    {task && (
+                        <span 
+                            className="inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded text-white shadow-sm self-start sm:self-auto"
+                            style={{ backgroundColor: task.color }}
+                        >
+                            {task.taskName}
+                        </span>
+                    )}
+                </div>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[11px] text-slate-400">{doc.owner}</span>
-                    <span className="text-slate-200">·</span>
+                    {doc.section === "inherited" && unitName && (
+                        <>
+                            <span className="text-[11px] text-purple-600 font-medium bg-purple-50 px-1.5 py-0.5 rounded">
+                                Inherited from: {unitName}
+                            </span>
+                            <span className="text-slate-200">·</span>
+                        </>
+                    )}
                     <span className="text-[11px] text-slate-400">{doc.uploadDate}</span>
                     <span className="text-slate-200">·</span>
                     <span className="text-[11px] text-slate-400 font-mono">{doc.size}</span>
@@ -76,6 +94,11 @@ export function DocRow({
                         {doc.isPublic ? <Globe size={14}/> : <Lock size={14}/>}
                     </button>
                 )}
+                
+                <button onClick={() => onTask(doc)} title="Task / Label" className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-purple-50 hover:text-purple-600 transition-colors">
+                    <Tag size={14}/>
+                </button>
+
                 {/* Share button only available for the user's own documents */}
                 {doc.section === "mine" && (
                     <button onClick={() => onShare(doc)} title="Share" className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-blue-50 hover:text-[#2563EB] transition-colors">

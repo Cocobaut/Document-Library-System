@@ -4,7 +4,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import admin_router, auth_router, document_router, bookmark_router
+from routers import admin_router, auth_router, document_router, bookmark_router, task_router
 from core.config import get_settings
 from core.exceptions import (
     QuotaExceededException,
@@ -50,6 +50,7 @@ app.include_router(admin_router.router)
 app.include_router(manager_router.router)
 app.include_router(document_router.router)
 app.include_router(bookmark_router.router)
+app.include_router(task_router.router)
 
 
 @app.get("/", tags=["Health Check"])

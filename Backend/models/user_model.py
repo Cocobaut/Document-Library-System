@@ -29,6 +29,7 @@ class User(Base):
     unit = relationship("Unit", back_populates="users")
     documents = relationship("Document", back_populates="owner")
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="user", cascade="all, delete-orphan")
     
     shared_documents = relationship(
         "DocumentShare", 

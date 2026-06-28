@@ -31,6 +31,7 @@ class Document(Base):
     unit = relationship("Unit", back_populates="documents")
     shares = relationship("DocumentShare", back_populates="document", cascade="all, delete-orphan")
     bookmarks = relationship("Bookmark", back_populates="document", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="document", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Document(document_id={self.document_id}, title='{self.title}', owner_id={self.owner_id})>"

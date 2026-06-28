@@ -6,7 +6,14 @@
  */
 
 /** User authorization role determining access level and available features. */
-export type Role = "user" | "manager" | "admin";
+export type Role = "admin" | "manager" | "user";
+
+export interface Task {
+    taskId: string;
+    documentId: string;
+    taskName: string;
+    color: string;
+}
 
 /** Document ownership section, indicating how the user relates to the document. */
 export type DocSection = "mine" | "shared" | "inherited";
@@ -34,6 +41,7 @@ export type Modal =
     | { type: "edit-user"; user: UserRecord }
     | { type: "delete-user"; id: string }
     | { type: "reset-pw"; user: UserRecord }
+    | { type: "task"; doc: Doc }
     | null;
 
 /** Frontend representation of a document entity. */
@@ -43,6 +51,7 @@ export interface Doc {
     isPublic: boolean; section: DocSection;
     bookmarked: boolean; status: DocStatus;
     sharedWith?: string[];
+    unitId?: string;
 }
 
 /** Frontend representation of a user account. */
