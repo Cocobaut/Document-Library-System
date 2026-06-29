@@ -58,6 +58,7 @@ export function DocumentsTab({ role, userUnitName }: { role: Role, userUnitName?
     const [filterType, setFilterType] = useState("all");
     const [sort, setSort] = useState("date-desc");
     const [filterTask, setFilterTask] = useState("all");
+    const [filterBookmark, setFilterBookmark] = useState("all");
 
     const [modal, setModal] = useState<Modal>(null);
     const [toast, setToast] = useState<{ msg:string; type:"success"|"error"|"info" }|null>(null);
@@ -163,7 +164,8 @@ export function DocumentsTab({ role, userUnitName }: { role: Role, userUnitName?
             
             return (matchesName || matchesOwner || matchesFolder)
                 && (filterType === "all" || d.type === filterType)
-                && (filterTask === "all" || docTask?.taskName === filterTask);
+                && (filterTask === "all" || docTask?.taskName === filterTask)
+                && (filterBookmark === "all" || (filterBookmark === "bookmarked" && d.bookmarked));
         })
         .sort((a, b) => {
             if (sort === "name-asc") return a.name.localeCompare(b.name);
@@ -291,7 +293,10 @@ export function DocumentsTab({ role, userUnitName }: { role: Role, userUnitName?
                         <option key={t.taskId} value={t.taskName}>{t.taskName}</option>
                     ))}
                 </SelectInput>
-
+                <SelectInput value={filterBookmark} onChange={setFilterBookmark}>
+                    <option value="all">All Documents</option>
+                    <option value="bookmarked">Bookmarked Only</option>
+                </SelectInput>
 
                 <Btn variant="ghost" size="sm" icon={<RefreshCw size={13}/>} onClick={loadDocs}>Refresh</Btn>
                 <span className="text-xs text-slate-400 ml-auto">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
