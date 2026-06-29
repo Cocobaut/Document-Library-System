@@ -1,0 +1,39 @@
+﻿# ============================================
+# Viettel Document Management - Requirements
+# ============================================
+
+# --- Web Framework ---
+fastapi
+uvicorn
+python-multipart
+
+# --- Database ---
+sqlalchemy
+psycopg2-binary
+alembic
+
+# --- Authentication & Security ---
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.2.0
+
+# --- Data Validation ---
+pydantic
+pydantic-settings
+email-validator
+
+# --- Object Storage (S3/MinIO) ---
+boto3
+
+# --- Search Engine ---
+# elasticsearch==8.15.0    # Bá» comment náº¿u dÃ¹ng Elasticsearch
+# meilisearch==0.31.0      # Bá» comment náº¿u dÃ¹ng Meilisearch
+
+# --- File Processing ---
+# PyPDF2==3.0.1            # BÃ³c tÃ¡ch ná»™i dung PDF
+# python-docx==1.1.2       # Äá»c file DOCX
+# openpyxl==3.1.5          # Äá»c file XLSX
+
+# --- Utilities ---
+python-dotenv
+
