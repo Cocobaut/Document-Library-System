@@ -4,13 +4,14 @@ import { ModalShell } from "./Modal";
 import { TextInput, Btn, Field } from "./DesignSystem";
 import { Tag } from "lucide-react";
 import { Task, Doc } from "../types";
-import { createTaskApi, updateTaskApi } from "../services/taskApi";
+import { createTaskApi, updateTaskApi, deleteTaskApi } from "../services/taskApi";
 
 interface TaskDialogProps {
     doc: Doc;
     existingTask?: Task;
     onClose: () => void;
     onSuccess: (task: Task) => void;
+    onDelete?: (taskId: string) => void;
     onError: (msg: string) => void;
 }
 
@@ -24,7 +25,7 @@ const COLORS = [
     "#1F2937", // Gray
 ];
 
-export function TaskDialog({ doc, existingTask, onClose, onSuccess, onError }: TaskDialogProps) {
+export function TaskDialog({ doc, existingTask, onClose, onSuccess, onDelete, onError }: TaskDialogProps) {
     const [taskName, setTaskName] = useState(existingTask?.taskName || "");
     const [color, setColor] = useState(existingTask?.color || COLORS[0]);
     const [loading, setLoading] = useState(false);
@@ -59,6 +60,20 @@ export function TaskDialog({ doc, existingTask, onClose, onSuccess, onError }: T
         }
     };
 
+    const handleDelete = async () => {
+        if (!existingTask) return;
+        setLoading(true);
+        try {
+            await deleteTaskApi(existingTask.taskId);
+            if (onDelete) onDelete(existingTask.taskId);
+            onClose();
+        } catch (err: any) {
+            onError(err.message || "Failed to delete task");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <ModalShell title={existingTask ? "Edit Task" : "Add Task"} subtitle={doc.name} onClose={onClose}>
             <div className="space-y-5">
@@ -85,7 +100,14 @@ export function TaskDialog({ doc, existingTask, onClose, onSuccess, onError }: T
                     </div>
                 </Field>
                 <div className="flex gap-3 justify-end pt-2">
-                    <Btn variant="outline" onClick={onClose}>Cancel</Btn>
+                    {existingTask && (
+                        <div className="mr-auto">
+                            <Btn variant="outline" onClick={handleDelete} disabled={loading}>
+                                <span className="text-red-500">Remove Task</span>
+                            </Btn>
+                        </div>
+                    )}
+                    <Btn variant="outline" onClick={onClose} disabled={loading}>Cancel</Btn>
                     <Btn onClick={handleSubmit} disabled={loading}>
                         {loading ? "Saving..." : "Save"}
                     </Btn>

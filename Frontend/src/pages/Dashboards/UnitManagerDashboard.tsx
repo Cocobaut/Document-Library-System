@@ -60,7 +60,7 @@ export function ManagerDashboard({ user, activeNav }: { user: UserRecord, active
         }
     }, [activeNav]);
 
-    if (activeNav === "documents") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><DocumentsTab role={user.role}/></div>;
+    if (activeNav === "documents") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><DocumentsTab role={user.role} userUnitName={user.unit}/></div>;
     if (activeNav === "upload") return <div className="flex-1 overflow-y-auto bg-slate-50 p-6"><UploadTab role={user.role}/></div>;
 
     return (

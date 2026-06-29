@@ -23,6 +23,7 @@ export interface ApiDoc {
     folder_id?: string | null;
     bookmarked?: boolean;
     is_bookmarked?: boolean;
+    folder_name?: string | null;
 }
 
 /** Paginated document list response with items grouped by ownership section. */
@@ -65,6 +66,8 @@ export interface UserResponse {
 export interface UnitStatResponse {
     unit_id: string;
     name: string;
+    parent_id: string | null;
+    path: string;
     user_count: number;
     document_count: number;
 }
@@ -150,7 +153,7 @@ export async function fetchUnitDetailApi(unitId: string): Promise<UnitDetailResp
  * @returns Promise containing the created unit data
  * @throws Error with the server's detail message on failure
  */
-export async function createUnitApi(payload: { name: string; parent_id?: number | null; quota_bytes?: number }): Promise<any> {
+export async function createUnitApi(payload: { name: string; parent_id?: string | null; quota_bytes?: number }): Promise<any> {
     const res = await fetch(`${API_BASE}/admin/units`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -404,15 +407,66 @@ export async function uploadDocumentApi(file: File, title?: string): Promise<Api
 }
 
 /**
+ * Downloads a document from the server.
+ *
+ * @param documentId - The ID of the document to download
+ * @param filename - The filename to save the downloaded file as
+ * @throws Error if the download fails
+ */
+export async function downloadDocumentApi(documentId: string, filename: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/documents/${documentId}/download`, {
+        headers: authHeaders(),
+    });
+    
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? "Download failed");
+    }
+    
+    // Create a blob URL and trigger the download
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Cleanup
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+}
+
+/**
+ * Deletes a document from the server. (Manager only)
+ *
+ * @param documentId - The ID of the document to delete
+ * @throws Error if the deletion fails
+ */
+export async function deleteDocumentApi(documentId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/manager/documents/${documentId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+    });
+    
+    if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? "Failed to delete document");
+    }
+}
+
+/**
  * Uploads multiple files as a folder batch to the server.
  *
  * @param files - Array of File objects to upload together
+ * @param folderName - The extracted name of the folder being uploaded
  * @returns Promise containing an array of created document records
  * @throws Error with the server's detail message on failure
  */
-export async function uploadFolderApi(files: File[]): Promise<ApiDoc[]> {
+export async function uploadFolderApi(files: File[], folderName: string): Promise<ApiDoc[]> {
     const fd = new FormData();
-    files.forEach(f => fd.append("files", f));
+    fd.append("folder_name", folderName);
+    files.forEach(f => fd.append("files", f, f.name));
     const res = await fetch(`${API_BASE}/documents/upload-folder`, {
         method: "POST",
         headers: authHeaders(),
@@ -525,5 +579,6 @@ export function apiDocToDoc(d: ApiDoc, section: DocSection): Doc {
         bookmarked: d.bookmarked ?? d.is_bookmarked ?? false,
         status: "active",
         unitId: d.unit_id,
+        folderName: d.folder_name ?? undefined,
     };
 }

@@ -2,10 +2,12 @@
 # Các API dùng chung cho User (Load Main Page, Tìm kiếm, Đánh dấu sao)
 
 import os
+import shutil
 from uuid import UUID
 import uuid
 
 from fastapi import APIRouter, Depends, Form, UploadFile, File, Query, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from services.user_service import UserService
@@ -71,6 +73,31 @@ async def get_document(
     return document
 
 
+@router.get("/{document_id}/download", summary="Tải xuống tài liệu")
+async def download_document(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Tải file dựa trên file_path tuyệt đối được lưu trữ.
+    Đảm bảo user có quyền truy cập.
+    """
+    document = DocumentService.check_document_access(db, current_user, document_id)
+    
+    if not document.file_path or not os.path.exists(document.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File không tồn tại trên hệ thống máy chủ."
+        )
+        
+    return FileResponse(
+        path=document.file_path,
+        filename=document.title,
+        media_type="application/octet-stream"
+    )
+
+
 @router.post("/{document_id}/share", response_model=DocumentShareResponse, status_code=status.HTTP_201_CREATED, summary="Chia sẻ tài liệu")
 async def share_document(
     document_id: UUID,
@@ -134,9 +161,17 @@ async def user_upload_document(
 
     file_ext = os.path.splitext(file.filename)[1].replace(".", "").lower()
     
+    storage_dir = os.path.abspath(f"storage/users/{current_user.user_id}")
+    os.makedirs(storage_dir, exist_ok=True)
+    abs_file_path = os.path.join(storage_dir, file.filename)
+    
+    file.file.seek(0)
+    with open(abs_file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
     file_info = {
         "file_name": file.filename,
-        "file_path": f"storage/users/{current_user.user_id}/{file.filename}",
+        "file_path": abs_file_path,
         "file_size": file_size,
         "file_type": file_ext,
         "mime_type": file.content_type
@@ -167,6 +202,7 @@ async def user_upload_document(
 @router.post("/upload-folder", summary="User upload nguyên folder (nhiều tài liệu công khai)", response_model=List[DocumentResponse])
 async def user_upload_folder(
     files: List[UploadFile] = File(..., description="Danh sách các file trong folder"),
+    folder_name: str = Form(..., description="Tên của folder"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -210,12 +246,21 @@ async def user_upload_folder(
 
     generated_folder_id = uuid.uuid4()
     
+    storage_dir = os.path.abspath(f"storage/users/{current_user.user_id}/{generated_folder_id}")
+    os.makedirs(storage_dir, exist_ok=True)
+    
     files_info = []
     for file in files:
         file_ext = os.path.splitext(file.filename)[1].replace(".", "").lower()
+        abs_file_path = os.path.join(storage_dir, file.filename)
+        
+        file.file.seek(0)
+        with open(abs_file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
         files_info.append({
             "file_name": file.filename,
-            "file_path": f"storage/users/{current_user.user_id}/{generated_folder_id}/{file.filename}",
+            "file_path": abs_file_path,
             "file_size": file_size_mappings[file.filename],
             "file_type": file_ext,
             "mime_type": file.content_type
@@ -225,6 +270,7 @@ async def user_upload_folder(
         new_documents = DocumentService.create_user_shared_folder(
             db=db,
             folder_id=generated_folder_id,
+            folder_name=folder_name,
             files_info=files_info,
             user=current_user
         )

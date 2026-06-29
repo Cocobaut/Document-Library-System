@@ -65,12 +65,14 @@ class UnitRepository:
         results = db.query(
             Unit.unit_id,
             Unit.name,
+            Unit.parent_id,
+            Unit.path,
             func.count(func.distinct(User.user_id)).label("user_count"),
             func.count(func.distinct(Document.document_id)).label("document_count")
         )\
         .outerjoin(User, Unit.unit_id == User.unit_id)\
         .outerjoin(Document, Unit.unit_id == Document.unit_id)\
-        .group_by(Unit.unit_id, Unit.name)\
+        .group_by(Unit.unit_id, Unit.name, Unit.parent_id, Unit.path)\
         .order_by(Unit.name.asc())\
         .all()
         

@@ -66,3 +66,21 @@ class TaskService:
             task.color = payload.color
 
         return TaskRepository.update(db, task)
+
+    @staticmethod
+    def delete_task(db: Session, user: User, task_id: UUID) -> None:
+        """Xóa task. Chỉ chủ sở hữu mới được xóa."""
+        task = TaskRepository.get_by_id(db, task_id)
+        if not task:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Nhãn (task) không tồn tại."
+            )
+        
+        if task.user_id != user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền xóa nhãn của người khác."
+            )
+
+        TaskRepository.delete(db, task)

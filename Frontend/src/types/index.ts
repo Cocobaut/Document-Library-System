@@ -52,6 +52,7 @@ export interface Doc {
     bookmarked: boolean; status: DocStatus;
     sharedWith?: string[];
     unitId?: string;
+    folderName?: string;
 }
 
 /** Frontend representation of a user account. */

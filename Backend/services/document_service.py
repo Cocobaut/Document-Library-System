@@ -206,6 +206,7 @@ class DocumentService:
     def create_user_shared_folder(
         db: Session, 
         folder_id: UUID, 
+        folder_name: str,
         files_info: list[dict], 
         user: User
     ) -> list[Document]:
@@ -225,6 +226,7 @@ class DocumentService:
                 unit_id=user.unit_id,
                 is_public=True,                
                 folder_id=folder_id,       
+                folder_name=folder_name,
             )
             
             new_doc = DocumentRepository.create(db, document_data)

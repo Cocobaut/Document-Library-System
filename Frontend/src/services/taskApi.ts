@@ -82,3 +82,17 @@ export async function updateTaskApi(taskId: string, payload: TaskUpdatePayload):
     const data = await res.json();
     return apiTaskToTask(data);
 }
+
+/**
+ * Delete a task
+ */
+export async function deleteTaskApi(taskId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.detail || "Failed to delete task");
+    }
+}

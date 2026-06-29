@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Search, RefreshCw, SlidersHorizontal, FolderOpen, Users, AlertCircle, Tag } from "lucide-react";
 import { Role, Doc, DocSection, Modal, Task } from "../../types";
-import { fetchDocumentsApi, fetchBookmarksApi, removeBookmarkApi, markBookmarkApi, shareDocumentApi, apiDocToDoc, fetchAllUnitsApi } from "../../services/documentApi";
+import { fetchDocumentsApi, fetchBookmarksApi, removeBookmarkApi, markBookmarkApi, shareDocumentApi, apiDocToDoc, fetchAllUnitsApi, downloadDocumentApi, deleteDocumentApi } from "../../services/documentApi";
 import { fetchTasksApi } from "../../services/taskApi";
 import { TextInput, SelectInput, Btn, Field } from "../../components/DesignSystem";
 import { ModalShell, Confirm, ToastBar } from "../../components/Modal";
@@ -46,7 +46,7 @@ function ScrollTrigger({ onTrigger, loading, hasMore }: { onTrigger: () => void,
     );
 }
 
-export function DocumentsTab({ role }: { role: Role }) {
+export function DocumentsTab({ role, userUnitName }: { role: Role, userUnitName?: string }) {
     const [docs, setDocs] = useState<Doc[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [totals, setTotals] = useState({ personal: 0, shared: 0, unit_inherited: 0 });
@@ -157,7 +157,11 @@ export function DocumentsTab({ role }: { role: Role }) {
         .filter(d => {
             const q = search.toLowerCase();
             const docTask = tasks.find(t => t.documentId === d.id);
-            return (d.name.toLowerCase().includes(q) || d.owner.toLowerCase().includes(q))
+            const matchesName = d.name.toLowerCase().includes(q);
+            const matchesOwner = d.owner.toLowerCase().includes(q);
+            const matchesFolder = d.folderName ? d.folderName.toLowerCase().includes(q) : false;
+            
+            return (matchesName || matchesOwner || matchesFolder)
                 && (filterType === "all" || d.type === filterType)
                 && (filterTask === "all" || docTask?.taskName === filterTask);
         })
@@ -194,15 +198,28 @@ export function DocumentsTab({ role }: { role: Role }) {
         }
     };
 
+    const onDownload = async (doc: Doc) => {
+        try {
+            await downloadDocumentApi(doc.id, doc.name);
+        } catch (err: any) {
+            showToast(err.message || "Failed to download document", "error");
+        }
+    };
+
     const onTogglePublic = (id: string) => {
         setDocs(p => p.map(d => d.id === id ? { ...d, isPublic: !d.isPublic } : d));
         showToast("Visibility updated", "info");
     };
 
-    const confirmDelete = (id: string) => {
-        setDocs(p => p.filter(d => d.id !== id));
-        setModal(null);
-        showToast("Document deleted", "success");
+    const confirmDelete = async (id: string) => {
+        try {
+            await deleteDocumentApi(id);
+            setDocs(p => p.filter(d => d.id !== id));
+            setModal(null);
+            showToast("Document deleted", "success");
+        } catch (err: any) {
+            showToast(err.message || "Failed to delete document", "error");
+        }
     };
 
     const showToast = (msg: string, type: "success"|"error"|"info" = "success") => setToast({ msg, type });
@@ -275,9 +292,7 @@ export function DocumentsTab({ role }: { role: Role }) {
                     ))}
                 </SelectInput>
 
-                {role !== "user" && (
-                    <Btn variant="outline" size="md" icon={<SlidersHorizontal size={13}/>}>Bulk Actions</Btn>
-                )}
+
                 <Btn variant="ghost" size="sm" icon={<RefreshCw size={13}/>} onClick={loadDocs}>Refresh</Btn>
                 <span className="text-xs text-slate-400 ml-auto">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
             </div>
@@ -308,12 +323,13 @@ export function DocumentsTab({ role }: { role: Role }) {
                                     const docTask = tasks.find(t => t.documentId === doc.id);
                                     return (
                                         <DocRow
-                                            key={doc.id} doc={doc} role={role} unitName={unitName} task={docTask}
+                                            key={doc.id} doc={doc} role={role} unitName={unitName} task={docTask} userUnitName={userUnitName}
                                             onBookmark={onBookmark}
                                             onShare={doc => { setShareForm({ username: "", unitId: "" }); setModal({ type:"share", doc }); }}
                                             onTask={doc => setModal({ type: "task", doc })}
                                             onDelete={id => setModal({ type:"delete-doc", id })}
                                             onTogglePublic={onTogglePublic}
+                                            onDownload={() => onDownload(doc)}
                                         />
                                     );
                                 })}
@@ -370,6 +386,10 @@ export function DocumentsTab({ role }: { role: Role }) {
                             return [...prev, newTask];
                         });
                         showToast(`Task '${newTask.taskName}' saved successfully`);
+                    }}
+                    onDelete={(taskId) => {
+                        setTasks(prev => prev.filter(t => t.taskId !== taskId));
+                        showToast(`Task removed successfully`);
                     }}
                     onError={(msg) => showToast(msg, "error")}
                 />

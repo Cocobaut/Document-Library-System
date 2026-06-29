@@ -24,17 +24,23 @@ import { FileChip, StatusPill } from "../utils";
  * @param onTogglePublic - Callback when public/private toggle is clicked
  */
 export function DocRow({
-    doc, role, unitName, task, onBookmark, onShare, onTask, onDelete, onTogglePublic,
+    doc, role, unitName, task, userUnitName, onBookmark, onShare, onTask, onDelete, onTogglePublic, onDownload
 }: {
-    doc: Doc; role: Role; unitName?: string; task?: Task;
+    doc: Doc; role: Role; unitName?: string; task?: Task; userUnitName?: string;
     onBookmark: (id: string) => void;
     onShare: (doc: Doc) => void;
     onTask: (doc: Doc) => void;
     onDelete: (id: string) => void;
     onTogglePublic: (id: string) => void;
+    onDownload: () => void;
 }) {
     // Only non-user roles (manager, admin) can delete documents and toggle visibility
-    const canDelete = role !== "user";
+    let canDelete = role !== "user";
+    if (canDelete && doc.section === "inherited") {
+        if (unitName && userUnitName && unitName !== userUnitName) {
+            canDelete = false;
+        }
+    }
     const canToggle = role !== "user";
 
     return (
@@ -61,6 +67,8 @@ export function DocRow({
                             <span className="text-slate-200">·</span>
                         </>
                     )}
+                    <span className="text-[11px] text-slate-500">Folder: <span className="font-medium text-slate-700">{doc.folderName || "None"}</span></span>
+                    <span className="text-slate-200">·</span>
                     <span className="text-[11px] text-slate-400">{doc.uploadDate}</span>
                     <span className="text-slate-200">·</span>
                     <span className="text-[11px] text-slate-400 font-mono">{doc.size}</span>
@@ -108,7 +116,7 @@ export function DocRow({
                 <button onClick={() => onBookmark(doc.id)} title={doc.bookmarked ? "Remove bookmark" : "Bookmark"} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${doc.bookmarked ? "text-amber-400 hover:bg-amber-50" : "text-slate-400 hover:bg-amber-50 hover:text-amber-400"}`}>
                     <Star size={14} fill={doc.bookmarked ? "currentColor" : "none"}/>
                 </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors" title="Download">
+                <button onClick={onDownload} className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors" title="Download">
                     <Download size={14}/>
                 </button>
                 {canDelete && (

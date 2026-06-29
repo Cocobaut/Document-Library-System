@@ -88,6 +88,9 @@ export function UploadTab({ role }: { role: Role }) {
         if (arr.length === 0) return;
         // Generate unique IDs for each file to track them in the queue
         
+        // Extract folder name from the first file's webkitRelativePath
+        const folderName = (arr[0] as any).webkitRelativePath?.split('/')[0] || "Unknown Folder";
+
         const ids = arr.map((file, i) => {
             const id = `q${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`;
             return { id, file };
@@ -105,7 +108,7 @@ export function UploadTab({ role }: { role: Role }) {
         setQueue(prev => [...prev, ...queueItems]);
         
         try {
-            await uploadFolderApi(arr);
+            await uploadFolderApi(arr, folderName);
             // Use a Set for O(1) lookup when updating all batch items at once
             const idSet = new Set(ids.map(i => i.id));
             setQueue(prev => prev.map(q => idSet.has(q.id) ? { ...q, progress: 100, status: "done" } : q));
@@ -131,8 +134,10 @@ export function UploadTab({ role }: { role: Role }) {
                     className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragging ? "border-[#2563EB] bg-blue-50 scale-[1.01]" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30"}`}
                 >
                     <input ref={inputRef} type="file" multiple className="hidden"
+                        onClick={e => e.stopPropagation()}
                         onChange={e => { if (e.target.files?.length) { handleFiles(e.target.files); e.target.value = ""; } }} />
                     <input ref={folderInputRef} type="file" multiple className="hidden"
+                        onClick={e => e.stopPropagation()}
                         {...({ webkitdirectory: "true", directory: "true" } as any)}
                         onChange={e => { if (e.target.files?.length) { handleFolderUpload(e.target.files); e.target.value = ""; } }} />
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-colors ${dragging ? "bg-[#2563EB]" : "bg-blue-50"}`}>

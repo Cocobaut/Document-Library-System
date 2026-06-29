@@ -49,3 +49,15 @@ async def get_tasks(
     Lấy danh sách các task do user hiện tại tạo.
     """
     return TaskService.get_user_tasks(db, current_user)
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_task(
+    task_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Xóa một task đã có.
+    """
+    TaskService.delete_task(db, current_user, task_id)
+    return None

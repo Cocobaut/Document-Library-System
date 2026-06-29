@@ -24,6 +24,7 @@ class Document(Base):
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.unit_id"), nullable=False, index=True)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     folder_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    folder_name = Column(String(255), nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships đối ứng khép kín

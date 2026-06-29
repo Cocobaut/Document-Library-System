@@ -9,14 +9,14 @@ from uuid import UUID
 class UnitCreate(BaseModel):
     """Schema tạo đơn vị mới"""
     name: str = Field(..., min_length=1, max_length=255, description="Tên đơn vị")
-    parent_id: Optional[int] = Field(None, description="ID đơn vị cha (null = đơn vị gốc)")
+    parent_id: Optional[UUID] = Field(None, description="ID đơn vị cha (null = đơn vị gốc)")
     quota_bytes: int = Field(default=0, ge=0, description="Hạn mức dung lượng (bytes)")
 
 
 class UnitUpdate(BaseModel):
     """Schema cập nhật đơn vị"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    parent_id: Optional[int] = Field(None, description="Di chuyển đơn vị sang nhánh mới")
+    parent_id: Optional[UUID] = Field(None, description="Di chuyển đơn vị sang nhánh mới")
     quota_bytes: Optional[int] = Field(None, ge=0)
     manager_user_id: Optional[UUID] = Field(None, description="ID của nhân sự quản lý mới được chỉ định")
 
@@ -53,6 +53,8 @@ class UnitStatResponse(BaseModel):
     """Schema trả về danh sách đơn vị kèm số liệu thống kê"""
     unit_id: UUID = Field(..., description="ID của đơn vị")
     name: str = Field(..., description="Tên phòng ban/đơn vị")
+    parent_id: Optional[UUID] = Field(None, description="ID đơn vị cha (null nếu là gốc)")
+    path: str = Field(..., description="Đường dẫn phân cấp của đơn vị")
     user_count: int = Field(0, description="Số lượng thành viên thuộc phòng ban")
     document_count: int = Field(0, description="Số lượng tài liệu thuộc phòng ban")
 

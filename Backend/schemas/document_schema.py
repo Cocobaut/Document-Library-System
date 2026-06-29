@@ -33,6 +33,7 @@ class DocumentResponse(BaseModel):
     is_public: bool
     created_at: datetime
     folder_id: Optional[UUID] = None
+    folder_name: Optional[str] = None
     
     class Config:
         from_attributes = True

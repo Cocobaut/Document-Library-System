@@ -10,7 +10,7 @@
  * - Deleting units with confirmation dialog
  */
 import React, { useState, useEffect } from "react";
-import { RefreshCw, Plus, Building2, Users, FileText, AlertCircle, Edit3, Trash2 } from "lucide-react";
+import { RefreshCw, Plus, Building2, Users, FileText, AlertCircle, Edit3, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { UnitStatResponse, UnitDetailResponse, fetchUnitsStatsApi, fetchUnitDetailApi, createUnitApi, updateUnitApi, deleteUnitApi } from "../../services/documentApi";
 import { Modal, Unit } from "../../types";
 import { fmtSize, Avatar, StatusPill, StorageBar } from "../../utils";
@@ -31,7 +31,7 @@ export function UnitsPanel() {
     const [detailError, setDetailError] = useState("");
     const [modal, setModal] = useState<Modal>(null);
     const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
-    const [form, setForm] = useState({ name: "", quota: "" });
+    const [form, setForm] = useState({ name: "", quota: "", parentId: "" });
     const [formLoading, setFormLoading] = useState(false);
 
     /*
@@ -112,6 +112,7 @@ export function UnitsPanel() {
                 name: form.name.trim(),
                 // Convert user-entered GB value to bytes for the API
                 quota_bytes: form.quota ? Number(form.quota) * 1e9 : 0,
+                parent_id: form.parentId ? form.parentId : null,
             });
             showToast("Unit created successfully");
             setModal(null);
@@ -221,38 +222,80 @@ export function UnitsPanel() {
                     </h3>
                     <div className="flex gap-2">
                         <Btn size="sm" variant="ghost" icon={<RefreshCw size={13}/>} onClick={loadUnits}>Refresh</Btn>
-                        <Btn size="sm" icon={<Plus size={13}/>} onClick={() => { setForm({ name: "", quota: "" }); setModal({ type: "add-unit" }); }}>
+                        <Btn size="sm" icon={<Plus size={13}/>} onClick={() => { setForm({ name: "", quota: "", parentId: "" }); setModal({ type: "add-unit" }); }}>
                             Add Unit
                         </Btn>
                     </div>
                 </div>
-                {units.map(unit => {
-                    const isSelected = selectedId === unit.unit_id;
-                    return (
-                        <button key={unit.unit_id} onClick={() => handleSelectUnit(unit.unit_id)}
-                            className={`w-full text-left bg-white rounded-2xl border p-4 transition-all hover:shadow-md ${isSelected ? "border-[#2563EB] shadow-md ring-1 ring-blue-200" : "border-slate-200 hover:border-slate-300 shadow-sm"}`}
-                        >
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-slate-800" style={{ fontFamily:"var(--font-display)" }}>{unit.name}</p>
+                
+                <div className="bg-white rounded-2xl border border-slate-200 p-2 shadow-sm min-h-[320px] overflow-x-auto">
+                    {(() => {
+                        if (units.length === 0) {
+                            return <div className="p-8 text-center text-sm text-slate-500">No departments found. Create one to get started.</div>;
+                        }
+
+                        // Build tree from flat list
+                        const map = new Map<string, any>();
+                        const roots: any[] = [];
+                        
+                        units.forEach(u => map.set(u.unit_id, { ...u, children: [] }));
+                        units.forEach(u => {
+                            const node = map.get(u.unit_id);
+                            if (u.parent_id && map.has(u.parent_id)) {
+                                map.get(u.parent_id).children.push(node);
+                            } else {
+                                roots.push(node);
+                            }
+                        });
+
+                        const UnitTreeNode = ({ node, depth = 0 }: { node: any, depth?: number }) => {
+                            const isSelected = selectedId === node.unit_id;
+                            const [expanded, setExpanded] = useState(true);
+                            
+                            return (
+                                <div>
+                                    <div 
+                                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors mt-1 ${isSelected ? "bg-blue-50/50 ring-1 ring-[#2563EB]/20" : "hover:bg-slate-50"}`} 
+                                        style={{ marginLeft: `${depth * 1.2}rem` }}
+                                        onClick={() => handleSelectUnit(node.unit_id)}
+                                    >
+                                        <div 
+                                            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} 
+                                            className="w-5 h-5 flex items-center justify-center cursor-pointer hover:bg-slate-200/50 rounded flex-shrink-0"
+                                        >
+                                            {node.children.length > 0 ? (
+                                                expanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />
+                                            ) : <span className="w-5" />}
+                                        </div>
+                                        
+                                        <div className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${isSelected ? "bg-[#2563EB]" : "bg-slate-100"}`}>
+                                            <Building2 size={13} className={isSelected ? "text-white" : "text-slate-500"}/>
+                                        </div>
+                                        
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm truncate ${isSelected ? "font-bold text-blue-800" : "font-medium text-slate-700"}`}>{node.name}</p>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3 text-[10px] text-slate-500 pr-2">
+                                            <span className="flex items-center gap-1" title="Members"><Users size={11}/>{node.user_count}</span>
+                                            <span className="flex items-center gap-1" title="Documents"><FileText size={11}/>{node.document_count}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {expanded && node.children.length > 0 && (
+                                        <div className="border-l border-slate-100 ml-4">
+                                            {node.children.map((child: any) => (
+                                                <UnitTreeNode key={child.unit_id} node={child} depth={depth + 1} />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ml-3 ${isSelected ? "bg-[#2563EB]" : "bg-slate-100"}`}>
-                                    <Building2 size={15} className={isSelected ? "text-white" : "text-slate-500"}/>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                                <span className="flex items-center gap-1"><Users size={11}/>{unit.user_count} members</span>
-                                <span className="flex items-center gap-1"><FileText size={11}/>{unit.document_count} docs</span>
-                            </div>
-                        </button>
-                    );
-                })}
-                {units.length === 0 && (
-                    <div className="bg-white rounded-2xl border border-slate-200 p-10 flex flex-col items-center justify-center text-slate-300">
-                        <Building2 size={36} strokeWidth={1.2} className="mb-2"/>
-                        <p className="text-sm text-slate-400">No departments found</p>
-                    </div>
-                )}
+                            );
+                        };
+
+                        return roots.map(root => <UnitTreeNode key={root.unit_id} node={root} />);
+                    })()}
+                </div>
             </div>
 
             {/* Detail */}
@@ -367,6 +410,20 @@ export function UnitsPanel() {
                     onClose={() => setModal(null)}
                 >
                     <div className="space-y-4">
+                        {modal.type === "add-unit" && (
+                            <Field label="Parent Department">
+                                <select 
+                                    value={form.parentId} 
+                                    onChange={e => setForm(p => ({ ...p, parentId: e.target.value }))}
+                                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-sm focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20 transition-all outline-none bg-white text-slate-800"
+                                >
+                                    <option value="">None (Root Department)</option>
+                                    {units.map(u => (
+                                        <option key={u.unit_id} value={u.unit_id}>{u.name}</option>
+                                    ))}
+                                </select>
+                            </Field>
+                        )}
                         <Field label="Unit Name">
                             <TextInput value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} placeholder="e.g. Marketing" />
                         </Field>
