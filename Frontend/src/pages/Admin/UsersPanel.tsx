@@ -11,7 +11,7 @@
  * - User deletion with confirmation
  */
 import React, { useState, useEffect } from "react";
-import { Search, UserPlus, Users, AlertTriangle, Edit3, Trash2 } from "lucide-react";
+import { Search, UserPlus, Users, AlertTriangle, Edit, Trash } from "lucide-react";
 import { UserRecord, Role, Modal } from "../../types";
 import { UnitStatResponse, fetchUsersApi, fetchUnitsStatsApi, createUserApi, updateUserApi, deleteUserApi } from "../../services/documentApi";
 import { Avatar, RolePill, StatusPill, StorageBar } from "../../utils";
@@ -271,7 +271,7 @@ export function UsersPanel() {
                                             <Btn 
                                                 size="sm" 
                                                 variant="ghost" 
-                                                icon={<Edit3 size={13} />} 
+                                                icon={<Edit size={13} />} 
                                                 onClick={() => {
                                                     setForm({
                                                         username: u.email || "", // we need username from UserRecord, mapped to email
@@ -287,7 +287,7 @@ export function UsersPanel() {
                                             <Btn 
                                                 size="sm" 
                                                 variant="ghost" 
-                                                icon={<Trash2 size={13} />} 
+                                                icon={<Trash size={13} />} 
                                                 onClick={() => setModal({ type: "delete-user", id: u.id })}
                                             />
                                         </div>
