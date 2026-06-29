@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from core.database import get_db
 from core.deps import get_current_active_admin
 from schemas.unit_schema import CompanyDocumentStatsResponse, UnitCreate, UnitLookupResponse, UnitResponse, UnitStatResponse, UnitUpdate, TotalQuotaSystemResponse, UnitQuotaResponse, UnitDetailResponse, AnalyticsOverviewResponse
-from schemas.user_schema import UserCreate, UserLookupResponse, UserResponse
+from schemas.user_schema import UserCreate, UserLookupResponse, UserResponse, UserUpdate
 from services.unit_service import UnitService
 from services.user_service import UserService
 
@@ -56,6 +56,18 @@ async def delete_unit(unit_id: UUID, db: Session = Depends(get_db)):
 async def create_user(data: UserCreate, db: Session = Depends(get_db)):
     """Admin tạo tài khoản người dùng"""
     return UserService.create_user(db, data)
+
+
+@router.put("/users/{user_id}", response_model=UserResponse, summary="Cập nhật người dùng")
+async def update_user(user_id: UUID, data: UserUpdate, db: Session = Depends(get_db)):
+    """Admin cập nhật thông tin người dùng"""
+    return UserService.update_user(db, user_id, data)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Xóa người dùng")
+async def delete_user(user_id: UUID, db: Session = Depends(get_db)):
+    """Admin xóa người dùng"""
+    UserService.delete_user(db, user_id)
 
 
 @router.put("/users/{user_id}/quota", response_model=UserResponse, summary="Cập nhật hạn mức dung lượng")

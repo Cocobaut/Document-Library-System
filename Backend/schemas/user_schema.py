@@ -19,10 +19,11 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     """Schema cập nhật người dùng"""
+    username: Optional[str] = Field(None, min_length=3, max_length=100)
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(None, max_length=255)
     role: Optional[str] = None
-    unit_id: Optional[int] = None
+    unit_id: Optional[UUID] = None
     quota_bytes: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
 

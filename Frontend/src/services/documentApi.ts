@@ -535,6 +535,38 @@ export async function markBookmarkApi(documentId: string): Promise<any> {
     return res.json().catch(() => null);
 }
 
+
+
+/**
+ * Updates an existing user's information.
+ */
+export async function updateUserApi(userId: string, payload: any): Promise<any> {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+        method: "PUT",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to update user");
+    }
+    return res.json();
+}
+
+/**
+ * Deletes a user by ID.
+ */
+export async function deleteUserApi(userId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+        method: "DELETE",
+        headers: authHeaders()
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to delete user");
+    }
+}
+
 /**
  * Removes a bookmark for a specific document.
  *

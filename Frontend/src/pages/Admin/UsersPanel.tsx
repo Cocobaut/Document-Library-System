@@ -11,9 +11,9 @@
  * - User deletion with confirmation
  */
 import React, { useState, useEffect } from "react";
-import { Search, UserPlus, Users, AlertTriangle } from "lucide-react";
+import { Search, UserPlus, Users, AlertTriangle, Edit3, Trash2 } from "lucide-react";
 import { UserRecord, Role, Modal } from "../../types";
-import { UnitStatResponse, fetchUsersApi, fetchUnitsStatsApi, createUserApi } from "../../services/documentApi";
+import { UnitStatResponse, fetchUsersApi, fetchUnitsStatsApi, createUserApi, updateUserApi, deleteUserApi } from "../../services/documentApi";
 import { Avatar, RolePill, StatusPill, StorageBar } from "../../utils";
 import { Btn, Field, TextInput, SelectInput } from "../../components/DesignSystem";
 import { ModalShell, Confirm, ToastBar } from "../../components/Modal";
@@ -141,6 +141,53 @@ export function UsersPanel() {
         }
     };
 
+    const handleUpdateUser = async () => {
+        if (!modal || modal.type !== "edit-user" || !form.username || !form.full_name || !form.unit) {
+            showToast("Please fill all required fields", "error");
+            return;
+        }
+        const selectedUnit = units.find(u => u.name === form.unit);
+        if (!selectedUnit) {
+            showToast("Selected unit not found", "error");
+            return;
+        }
+
+        setFormLoading(true);
+        try {
+            await updateUserApi(modal.user.id, {
+                username: form.username,
+                full_name: form.full_name,
+                unit_id: selectedUnit.unit_id
+            });
+            showToast("User updated successfully");
+            setModal(null);
+            loadData();
+        }
+        catch (err: any) {
+            showToast(err.message || "Failed to update user", "error");
+        }
+        finally {
+            setFormLoading(false);
+        }
+    };
+
+    const handleDeleteUser = async (userId: string) => {
+        setFormLoading(true);
+        try {
+            await deleteUserApi(userId);
+            showToast("User deleted successfully");
+            setModal(null);
+            loadData();
+        }
+        catch (err: any) {
+            showToast(err.message || "Failed to delete user", "error");
+        }
+        finally {
+            setFormLoading(false);
+        }
+    };
+
+
     /**
      * Filters the user list based on search query, role filter, and status filter.
      * Search matches against name, email, and unit name (case-insensitive).
@@ -220,7 +267,30 @@ export function UsersPanel() {
                                         {u.joined ? (isNaN(new Date(u.joined).getTime()) ? "Unknown" : new Date(u.joined).toLocaleDateString()) : "Unknown"}
                                     </td>
                                     <td className="px-4 py-3.5 text-right">
-                                        {/* Edit, delete, suspend buttons removed since there are no backend APIs for them yet */}
+                                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Btn 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                icon={<Edit3 size={13} />} 
+                                                onClick={() => {
+                                                    setForm({
+                                                        username: u.email || "", // we need username from UserRecord, mapped to email
+                                                        password: "",
+                                                        full_name: u.name,
+                                                        role: u.role,
+                                                        unit: u.unit,
+                                                        quota: "10"
+                                                    });
+                                                    setModal({ type: "edit-user", user: u });
+                                                }}
+                                            />
+                                            <Btn 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                icon={<Trash2 size={13} />} 
+                                                onClick={() => setModal({ type: "delete-user", id: u.id })}
+                                            />
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -304,11 +374,43 @@ export function UsersPanel() {
                 </ModalShell>
             )}
 
+            {modal?.type === "edit-user" && (
+                <ModalShell
+                    title="Edit User"
+                    subtitle="Update user information"
+                    onClose={() => setModal(null)}
+                >
+                    <div className="space-y-4">
+                        <Field label="Username">
+                            <TextInput value={form.username} onChange={v => setForm(p => ({ ...p, username: v }))} placeholder="e.g. john.doe" />
+                        </Field>
+                        <Field label="Full Name">
+                            <TextInput value={form.full_name} onChange={v => setForm(p => ({ ...p, full_name: v }))} placeholder="e.g. John Doe" />
+                        </Field>
+                        <Field label="Department">
+                            <SelectInput value={form.unit} onChange={v => setForm(p => ({ ...p, unit: v }))}>
+                                <option value="" disabled>Select Department</option>
+                                {units.map(u => (
+                                    <option key={u.unit_id} value={u.name}>{u.name}</option>
+                                ))}
+                            </SelectInput>
+                        </Field>
+                        
+                        <div className="flex gap-3 justify-end pt-2">
+                            <Btn variant="outline" onClick={() => setModal(null)}>Cancel</Btn>
+                            <Btn onClick={handleUpdateUser} disabled={formLoading}>
+                                {formLoading ? "Saving…" : "Save Changes"}
+                            </Btn>
+                        </div>
+                    </div>
+                </ModalShell>
+            )}
+
             {modal?.type === "delete-user" && (
                 <Confirm
-                    title="Delete User Account"
-                    message={`Delete ${users.find(u => u.id === modal.id)?.name}'s account? All their documents and data will be permanently removed.`}
-                    onConfirm={() => { setUsers(p => p.filter(u => u.id !== modal.id)); setModal(null); showToast("Account deleted", "error"); }}
+                    title="Delete User"
+                    message={`Are you sure you want to delete this user?\n\nThis action cannot be undone.`}
+                    onConfirm={() => handleDeleteUser(modal.id)}
                     onCancel={() => setModal(null)}
                     danger
                 />

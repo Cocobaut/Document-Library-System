@@ -127,3 +127,39 @@ class UserService:
                 detail=f"Không tìm thấy người dùng có tài khoản '{username}' trên hệ thống."
             )
         return UserLookupResponse(username=user.username, user_id=user.user_id)
+
+    @staticmethod
+    def update_user(db: Session, user_id, data: UserUpdate) -> User:
+        """Cập nhật thông tin người dùng"""
+        user = UserRepository.get_by_id(db, user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại")
+            
+        if data.username and data.username != user.username:
+            existing_user = UserRepository.get_by_username(db, data.username)
+            if existing_user:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tên người dùng đã được sử dụng")
+            user.username = data.username
+            
+        if data.full_name is not None:
+            user.full_name = data.full_name
+            
+        if data.unit_id is not None:
+            user.unit_id = data.unit_id
+            
+        if data.role is not None:
+            user.role = data.role
+            
+        db.commit()
+        db.refresh(user)
+        return user
+
+    @staticmethod
+    def delete_user(db: Session, user_id) -> None:
+        """Xóa người dùng"""
+        user = UserRepository.get_by_id(db, user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại")
+        
+        db.delete(user)
+        db.commit()
