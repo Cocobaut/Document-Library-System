@@ -7,7 +7,9 @@
 import { Role, UserRecord } from "../types";
 
 /** Base URL prefix for all API endpoints, proxied to the backend server. */
-export const API_BASE = "/api";
+export const API_BASE = import.meta.env.PROD && import.meta.env.VITE_API_URL 
+    ? `${import.meta.env.VITE_API_URL}/api` 
+    : "/api";
 
 /**
  * Maps backend role strings (uppercase) to frontend Role type values.
