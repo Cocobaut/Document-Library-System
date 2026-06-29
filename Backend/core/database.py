@@ -14,7 +14,6 @@ engine = create_engine(
     pool_pre_ping=True,  # Kiểm tra kết nối trước khi sử dụng
     pool_size=10,
     max_overflow=20,
-    pool_pre_ping=True,
 )
 
 # Tạo SessionLocal factory
