@@ -11,6 +11,8 @@ from schemas.auth_schema import ChangePasswordPayload
 from repositories.user_repository import UserRepository
 from fastapi import HTTPException, status
 from schemas.user_schema import UserLookupResponse
+from sqlalchemy import func
+from repositories.unit_repository import UnitRepository
 
 class UserService:
     """Service xử lý logic nghiệp vụ liên quan đến người dùng"""
@@ -25,6 +27,18 @@ class UserService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Tên tài khoản '{data.username}' đã tồn tại trên hệ thống."
             )
+            
+        unit = UnitRepository.get_by_id(db, data.unit_id)
+        if unit:
+            allocated = db.query(func.sum(User.storage_quota)).filter(User.unit_id == data.unit_id).scalar() or 0
+            remaining = unit.quota_bytes - allocated
+            if data.quota_bytes > remaining:
+                remaining_gb = remaining / (1024**3)
+                remaining_str = str(int(remaining_gb)) if remaining_gb.is_integer() else f"{remaining_gb:.2f}".rstrip('0').rstrip('.')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"The selected department has only {remaining_str} GB of remaining quota available."
+                )
             
         hashed_password = get_password_hash(data.password)
         
@@ -134,7 +148,31 @@ class UserService:
         user = UserRepository.get_by_id(db, user_id)
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Người dùng không tồn tại")
-            
+        
+        new_quota = data.quota_bytes if data.quota_bytes is not None else user.storage_quota
+        new_unit_id = data.unit_id if data.unit_id is not None else user.unit_id
+        quota_changed = data.quota_bytes is not None and data.quota_bytes != user.storage_quota
+        unit_changed = data.unit_id is not None and data.unit_id != user.unit_id
+                    
+        if quota_changed or unit_changed:
+            if new_unit_id:
+                unit = UnitRepository.get_by_id(db, new_unit_id)
+                if unit:
+                    allocated = db.query(func.sum(User.storage_quota)).filter(
+                        User.unit_id == new_unit_id,
+                        User.user_id != user.user_id  # exclude current user
+                    ).scalar() or 0
+                    
+                    remaining = unit.quota_bytes - allocated
+                    if new_quota > remaining:
+                        unit_quota_gb = unit.quota_bytes / (1024**3)
+                        unit_quota_str = str(int(unit_quota_gb)) if unit_quota_gb.is_integer() else f"{unit_quota_gb:.2f}".rstrip('0').rstrip('.')
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"The selected department has a total quota of {unit_quota_str} GB, which is not enough for this assignment."
+                        )
+
+        # Apply field updates
         if data.username and data.username != user.username:
             existing_user = UserRepository.get_by_username(db, data.username)
             if existing_user:
@@ -147,9 +185,13 @@ class UserService:
         if data.unit_id is not None:
             user.unit_id = data.unit_id
             
+        if data.quota_bytes is not None:
+            user.storage_quota = data.quota_bytes
+            
         if data.role is not None:
             user.role = data.role
             
+        db.add(user)
         db.commit()
         db.refresh(user)
         return user

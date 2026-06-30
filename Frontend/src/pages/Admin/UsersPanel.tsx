@@ -127,7 +127,7 @@ export function UsersPanel() {
                 role: form.role,
                 unit_id: selectedUnit.unit_id,
                 // Convert GB input to bytes (1 GB = 1024^3 bytes); fallback to 10 GB
-                quota_bytes: Number(form.quota) * 1024 * 1024 * 1024 || 10737418240,
+                quota_bytes: parseFloat(form.quota.toString().replace(/[^\d.]/g, '')) * 1024 * 1024 * 1024 || 10737418240,
             });
             showToast("Account created successfully");
             setModal(null);
@@ -157,7 +157,8 @@ export function UsersPanel() {
             await updateUserApi(modal.user.id, {
                 username: form.username,
                 full_name: form.full_name,
-                unit_id: selectedUnit.unit_id
+                unit_id: selectedUnit.unit_id,
+                quota_bytes: parseFloat(form.quota.toString().replace(/[^\d.]/g, '')) * 1024 * 1024 * 1024 || 0
             });
             showToast("User updated successfully");
             setModal(null);
@@ -279,7 +280,7 @@ export function UsersPanel() {
                                                         full_name: u.name,
                                                         role: u.role,
                                                         unit: u.unit,
-                                                        quota: "10"
+                                                        quota: (u.storageQuota / (1024 ** 3)).toString()
                                                     });
                                                     setModal({ type: "edit-user", user: u });
                                                 }}
@@ -394,6 +395,9 @@ export function UsersPanel() {
                                     <option key={u.unit_id} value={u.name}>{u.name}</option>
                                 ))}
                             </SelectInput>
+                        </Field>
+                        <Field label="Quota (GB)">
+                            <TextInput value={form.quota} onChange={v => setForm(p => ({ ...p, quota: v }))} placeholder="10" />
                         </Field>
                         
                         <div className="flex gap-3 justify-end pt-2">

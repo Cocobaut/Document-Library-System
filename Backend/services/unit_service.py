@@ -172,6 +172,14 @@ class UnitService:
         if data.name is not None:
             unit.name = data.name
         if data.quota_bytes is not None:
+            allocated = db.query(func.sum(User.storage_quota)).filter(User.unit_id == unit_id).scalar() or 0
+            if data.quota_bytes < allocated:
+                allocated_gb = allocated / (1024**3)
+                allocated_str = str(int(allocated_gb)) if allocated_gb.is_integer() else f"{allocated_gb:.2f}".rstrip('0').rstrip('.')
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"The unit already has {allocated_str} GB allocated to its users. The unit quota cannot be reduced below this value."
+                )
             unit.quota_bytes = data.quota_bytes
 
         if data.manager_user_id is not None:
